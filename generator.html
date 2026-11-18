@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arth Signature Generator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root { --lime: #a3c553; --forest: #16391c; --slate: #4a5a4c; --line: #d9e3cc; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px 16px 48px; background: #f4f7ef; color: var(--forest); font: 14px/1.45 Arial, Helvetica, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .lead { margin: 0 0 20px; color: var(--slate); }
+  form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  label { display: grid; gap: 4px; font-weight: bold; font-size: 13px; }
+  input[type=text], input[type=email], input[type=tel] { font: inherit; padding: 8px 10px; border: 1px solid #c4cfb6; border-radius: 8px; }
+  .full { grid-column: 1 / -1; }
+  .sliders { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .sliders label { font-weight: normal; }
+  .warn { grid-column: 1 / -1; margin: 0; color: #a23b16; font-size: 13px; }
+  form.publish { margin-top: 12px; grid-template-columns: 1fr; }
+  button:disabled { opacity: .5; cursor: wait; }
+  .warn:empty { display: none; }
+  h2 { font-size: 15px; margin: 24px 0 8px; }
+  .preview { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; padding: 16px; background: #fff; }
+  .preview.dark { background: #1f1f1f; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  button { font: inherit; font-weight: bold; padding: 9px 14px; border: 0; border-radius: 8px; background: var(--forest); color: #fff; cursor: pointer; }
+  button.secondary { background: #fff; color: var(--forest); border: 1px solid var(--forest); }
+  ol { padding-left: 20px; color: var(--slate); }
+  code { background: #eef3e6; padding: 1px 4px; border-radius: 4px; }
+  .status { min-height: 1.4em; color: var(--slate); font-size: 13px; margin: 8px 0 0; }
+  @media (max-width: 560px) { form { grid-template-columns: 1fr; } .sliders { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Arth email signature generator</h1>
+  <p class="lead">Fill in the details and choose a photo. The signature is built from images, so it looks the same in light and dark mode, on web and in the Gmail apps.</p>
+
+  <form id="f" autocomplete="off">
+    <label>Full name <input type="text" name="name" value="Shikhar Parekh" required></label>
+    <label>Role <input type="text" name="role" value="Co-Founder &amp; Business Head" required></label>
+    <label>Phone (as shown) <input type="tel" name="phone" value="+91 94480 30000" required></label>
+    <label>Email <input type="email" name="email" value="shikhar@arthproject.com" required></label>
+    <label class="full">Photo (a round cut-out exported from Figma is used as is; any other photo is cropped to a circle) <input type="file" name="photo" accept="image/*"></label>
+    <div class="full sliders">
+      <label>Zoom <input type="range" name="zoom" min="1" max="3" step="0.01" value="1"></label>
+      <label>Left / right <input type="range" name="dx" min="-50" max="50" step="1" value="0"></label>
+      <label>Up / down <input type="range" name="dy" min="-50" max="50" step="1" value="0"></label>
+    </div>
+    <p class="warn" id="warn"></p>
+  </form>
+
+  <h2>Preview <label style="display:inline-flex; gap:6px; font-weight:normal; font-size:13px; margin-left:12px;"><input type="checkbox" id="darkToggle"> dark background</label></h2>
+  <div class="preview" id="preview"></div>
+  <form class="publish" id="pub" autocomplete="off" onsubmit="return false">
+    <label class="full">GitHub token (fine-grained, <em>Contents: read and write</em> on MGPLOrg/email-signature; used only for this upload and never saved)
+      <input type="password" name="token" placeholder="github_pat_…" autocomplete="off" spellcheck="false">
+    </label>
+  </form>
+  <div class="actions">
+    <button type="button" id="publish">1. Publish images to GitHub</button>
+    <button type="button" id="copy">2. Copy signature</button>
+    <button type="button" class="secondary" id="dlImages">Download the 4 images</button>
+    <button type="button" class="secondary" id="dlHtml">Download signature .html</button>
+  </div>
+  <p class="status" id="status" role="status"></p>
+
+  <h2>Steps</h2>
+  <ol>
+    <li>Fill in the details and choose a photo from this device (on a phone you can take one with the camera).</li>
+    <li>Paste a GitHub token and click <strong>Publish images to GitHub</strong>. The page uploads this person's 4 images to <code id="folder">assets/email/people/shikhar-parekh/</code> and waits until GitHub Pages serves them (about a minute).<br>
+      No token? Use <strong>Download the 4 images</strong> and upload them to that folder on GitHub by hand.</li>
+    <li>Click <strong>Copy signature</strong> and paste it into Gmail → Settings → Signature.</li>
+  </ol>
+</main>
+
+<script>
+const BASE = 'https://mgplorg.github.io/email-signature/assets/email/';
+const W = 700, H = 200, S = 2; // design size; images are exported at 2x
+const f = document.getElementById('f');
+const st = { assets: {}, photo: null, photoIsCutout: false };
+
+const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const slug = s => s.trim().toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'person';
+const digits = s => s.replace(/[^0-9]/g, '');
+const load = src => new Promise((ok, err) => { const i = new Image(); i.crossOrigin = 'anonymous'; i.onload = () => ok(i); i.onerror = () => err(new Error(src)); i.src = src; });
+
+// Image pieces of the 700×200 signature. Person-specific pieces live in people/<slug>/, the rest are shared.
+const PIECES = {
+  top:    { x: 0,   y: 0,   w: 700, h: 106, own: true },
+  left:   { x: 0,   y: 106, w: 492, h: 84,  own: true },
+  phone:  { x: 492, y: 106, w: 208, h: 20,  own: true, file: 'phone-row' },
+  email:  { x: 492, y: 126, w: 208, h: 20,  own: true, file: 'email-row' },
+  web:    { x: 492, y: 146, w: 208, h: 20,  file: 'web-row' },
+  ig:     { x: 492, y: 166, w: 22,  h: 24 },
+  fb:     { x: 514, y: 166, w: 20,  h: 24 },
+  li:     { x: 534, y: 166, w: 21,  h: 24 },
+  wa:     { x: 555, y: 166, w: 145, h: 24, file: 'wa-row' }, // runs to the right edge: no separate filler piece
+  bottom: { x: 0,   y: 190, w: 700, h: 10 },
+};
+const pieceFile = key => (PIECES[key].file || key) + '.png';
+// Person pieces carry a version so Gmail's image cache picks up a re-published photo.
+const pieceUrl = (key, p) => PIECES[key].own ? `${BASE}people/${slug(p.name)}/${pieceFile(key)}${st.version ? '?v=' + st.version : ''}` : `${BASE}shared/${pieceFile(key)}`;
+
+// Email-safe markup: only linked <img> pieces in a fixed table, no colours or text for dark mode to invert.
+function signatureHtml(p, src = pieceUrl) {
+  const img = (key, alt = '') => { const c = PIECES[key]; return `<img src="${src(key, p)}" alt="${esc(alt)}" width="${c.w}" height="${c.h}" style="display:block; width:${c.w}px; height:${c.h}px; border:0;">`; };
+  const td = (inner, attrs = '') => `<td${attrs} style="padding:0; font-size:0; line-height:0;">${inner}</td>`;
+  const link = (href, inner) => `<a href="${href}" target="_blank" style="text-decoration:none;">${inner}</a>`;
+  const tel = 'tel:+' + digits(p.phone);
+  return `<table cellpadding="0" cellspacing="0" border="0" width="700" style="width:700px; border-collapse:collapse; mso-table-lspace:0; mso-table-rspace:0;">
+  <tr>${td(link('https://arthproject.com', img('top', 'arth — Making Property Click')), ' colspan="2"')}</tr>
+  <tr>
+    ${td(img('left', `${p.name} — ${p.role}. Manpho Stambh, 1st Main Rd, opposite Shri Vasupujya Swami Jain Temple, Hebbal, Bengaluru, Karnataka 560032`), ' rowspan="4" width="492"')}
+    ${td(link(tel, img('phone', p.phone)), ' width="208"')}
+  </tr>
+  <tr>${td(link('mailto:' + p.email, img('email', p.email)))}</tr>
+  <tr>${td(link('https://arthproject.com', img('web', 'arthproject.com')))}</tr>
+  <tr>
+    <td style="padding:0; font-size:0; line-height:0;">
+      <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
+        <tr>
+          ${td(link('https://www.instagram.com/the.arth.project/', img('ig', 'Instagram')))}
+          ${td(link('https://www.facebook.com/share/1G9WyW885T/', img('fb', 'Facebook')))}
+          ${td(link('https://www.linkedin.com/company/arthproject/', img('li', 'LinkedIn')))}
+          ${td(link('https://wa.me/' + digits(p.phone), img('wa', 'WhatsApp')))}        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>${td(img('bottom', ' '), ' colspan="2"')}</tr>
+</table>`;
+}
+
+// Baseline of a text line as the browser lays it out (Figma "normal" line height for Poppins).
+function baseline(font, lineHeight) {
+  const d = document.createElement('div');
+  d.style.cssText = `position:absolute; visibility:hidden; font:${font}; line-height:${lineHeight};`;
+  d.innerHTML = 'Hg<span style="display:inline-block; width:0; height:0;"></span>';
+  document.body.appendChild(d);
+  const b = d.lastChild.offsetTop; d.remove(); return b;
+}
+function wrap(x, text, width) {
+  const lines = []; let line = '';
+  for (const word of text.split(' ')) {
+    const t = line ? line + ' ' + word : word;
+    if (x.measureText(t).width > width && line) { lines.push(line); line = word; } else line = t;
+  }
+  return lines.concat(line);
+}
+
+// Full 700×200 render at 2x, reassembled from the shared decoration pieces plus this person's content.
+function renderFull(p) {
+  const a = st.assets;
+  const c = document.createElement('canvas'); c.width = W * S; c.height = H * S;
+  const x = c.getContext('2d'); x.scale(S, S); x.imageSmoothingQuality = 'high';
+  x.fillStyle = '#ffffff'; x.fillRect(0, 0, W, H); // card area behind the text
+  x.drawImage(a.topLeft, 0, 0, 297, 104);
+  x.drawImage(a.topRight, 403, 0, 297, 104);
+  x.drawImage(a.photoBg, 297, 0, 106, 200);
+  x.drawImage(a.left, 0, 104, 26, 96);
+  x.drawImage(a.midA, 262, 104, 35, 50);
+  x.drawImage(a.midD, 403, 104, 89, 96);
+  x.drawImage(a.right, 656, 104, 44, 96);
+
+  // photo: round cut-outs (with their own white ring) are placed as is, other photos are cropped with a 2.5px white ring
+  const ph = st.photo || a.defaultPhoto;
+  if (st.photo && !st.photoIsCutout) {
+    const zoom = +f.zoom.value, dx = +f.dx.value, dy = +f.dy.value, d = 101;
+    const s = Math.min(ph.naturalWidth, ph.naturalHeight) / zoom;
+    const sx = Math.max(0, Math.min((ph.naturalWidth - s) / 2 - dx / 100 * s, ph.naturalWidth - s));
+    const sy = Math.max(0, Math.min((ph.naturalHeight - s) / 2 - dy / 100 * s, ph.naturalHeight - s));
+    x.fillStyle = '#ffffff'; x.beginPath(); x.arc(350, 72, 53, 0, Math.PI * 2); x.fill();
+    x.save(); x.beginPath(); x.arc(350, 72, d / 2, 0, Math.PI * 2); x.clip();
+    x.drawImage(ph, sx, sy, s, s, 297 + 2.5, 19 + 2.5, d, d); x.restore();
+  } else {
+    x.drawImage(ph, 297, 19, 106, 106);
+  }
+
+  // text (positions from Figma node 2738:2)
+  const text = (str, font, color, left, top, lh) => { x.font = font; x.fillStyle = color; x.textBaseline = 'alphabetic'; x.fillText(str, left, top + baseline(font, lh)); };
+  text(p.name, '700 24px Poppins', '#16391c', 28, 104, 'normal');
+  text(p.role, '500 12px Poppins', '#4a5a4c', 28, 136, 'normal');
+  x.font = '400 8px Poppins';
+  wrap(x, 'Manpho Stambh, 1st Main Rd, opposite Shri Vasupujya Swami Jain Temple, Hebbal, Bengaluru, Karnataka 560032', 262)
+    .forEach((l, i) => text(l, '400 8px Poppins', '#4a5a4c', 28, 160 + i * 11.5, '11.5px'));
+  [[a.iconPhone, p.phone, 106], [a.iconEmail, p.email, 126], [a.iconWeb, 'arthproject.com', 146]].forEach(([icon, t, top]) => {
+    x.drawImage(icon, 492, top, 16, 16);
+    text(t, '400 10px Poppins', '#16391c', 514, top + 1, 'normal');
+  });
+  // social icons at their Figma sizes and offsets inside the 492,170 group
+  x.drawImage(a.ig, 492, 170, 16, 16);
+  x.drawImage(a.fb, 492 + 22, 170 - 0.4, 16.8, 16.8);
+  x.drawImage(a.li, 492 + 42.7, 170 - 2.1, 20.2, 20.2);
+  x.drawImage(a.wa, 492 + 63.35, 170 - 3.85, 23.7, 23.7);
+  return c;
+}
+
+function cut(full, key) {
+  const r = PIECES[key], c = document.createElement('canvas');
+  c.width = r.w * S; c.height = r.h * S;
+  c.getContext('2d').drawImage(full, r.x * S, r.y * S, r.w * S, r.h * S, 0, 0, c.width, c.height);
+  return c;
+}
+
+const person = () => ({ name: f.name.value.trim(), role: f.role.value.trim(), phone: f.phone.value.trim(), email: f.email.value.trim() });
+function measure(text, font) { const x = document.createElement('canvas').getContext('2d'); x.font = font; return x.measureText(text).width; }
+
+function update() {
+  const p = person();
+  st.full = renderFull(p);
+  st.urls = Object.fromEntries(Object.keys(PIECES).map(k => [k, cut(st.full, k).toDataURL('image/png')]));
+  document.getElementById('preview').innerHTML = signatureHtml(p, k => st.urls[k]);
+  document.getElementById('folder').textContent = `assets/email/people/${slug(p.name)}/`;
+  const w = [];
+  if (measure(p.name, '700 24px Poppins') > 260) w.push('The name runs into the decoration on the right; consider a shorter form.');
+  if (measure(p.role, '500 12px Poppins') > 260) w.push('The role is wider than its space.');
+  if (measure(p.email, '400 10px Poppins') > 170) w.push('The email address is wider than its space and will be cut off.');
+  document.getElementById('warn').textContent = w.join(' ');
+}
+
+const status = t => { document.getElementById('status').textContent = t; };
+const download = (blob, name) => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); };
+const blobOf = c => new Promise(ok => c.toBlob(ok, 'image/png'));
+const ownPieces = () => Object.keys(PIECES).filter(k => PIECES[k].own);
+const htmlDoc = p => `<!DOCTYPE html>\n<html>\n<head>\n<meta charset="utf-8">\n<title>${esc(p.name)} Signature</title>\n</head>\n<body>\n<!-- Arth email signature (Figma node 2738:2, 700×200). Generated by generator.html. -->\n${signatureHtml(p)}\n</body>\n</html>\n`;
+
+document.getElementById('dlImages').onclick = async () => {
+  for (const k of ownPieces()) { download(await blobOf(cut(st.full, k)), pieceFile(k)); await new Promise(r => setTimeout(r, 300)); }
+  status(`Downloaded ${ownPieces().map(pieceFile).join(', ')}. Upload them to assets/email/people/${slug(person().name)}/ on GitHub.`);
+};
+// Publish this person's pieces to the repo as one commit via the GitHub API, then wait for GitHub Pages.
+const REPO = 'MGPLOrg/email-signature', BRANCH = 'main';
+async function gh(token, path, opts = {}) {
+  const r = await fetch(`https://api.github.com/repos/${REPO}/${path}`, {
+    ...opts,
+    headers: { Accept: 'application/vnd.github+json', Authorization: `Bearer ${token}`, 'X-GitHub-Api-Version': '2022-11-28', ...(opts.body ? { 'Content-Type': 'application/json' } : {}) },
+  });
+  if (!r.ok) {
+    const why = r.status === 401 ? 'the token is invalid or expired' : r.status === 403 || r.status === 404 ? 'the token has no write access to ' + REPO : (await r.json().catch(() => ({}))).message || r.statusText;
+    throw new Error(`GitHub said ${r.status}: ${why}`);
+  }
+  return r.json();
+}
+const toBase64 = blob => new Promise(ok => { const fr = new FileReader(); fr.onload = () => ok(fr.result.split(',')[1]); fr.readAsDataURL(blob); });
+
+async function publish() {
+  const token = document.getElementById('pub').token.value.trim();
+  if (!token) return status('Paste a GitHub token first, or use "Download the 4 images" and upload them by hand.');
+  const p = person(), dir = `assets/email/people/${slug(p.name)}`;
+  const btn = document.getElementById('publish'); btn.disabled = true;
+  try {
+    status('Uploading to GitHub…');
+    const files = [];
+    for (const k of ownPieces()) files.push({ path: `${dir}/${pieceFile(k)}`, blob: await blobOf(cut(st.full, k)) });
+    const head = await gh(token, `git/ref/heads/${BRANCH}`);
+    const base = await gh(token, `git/commits/${head.object.sha}`);
+    const tree = [];
+    for (const fl of files) {
+      const b = await gh(token, 'git/blobs', { method: 'POST', body: JSON.stringify({ content: await toBase64(fl.blob), encoding: 'base64' }) });
+      tree.push({ path: fl.path, mode: '100644', type: 'blob', sha: b.sha });
+    }
+    const t = await gh(token, 'git/trees', { method: 'POST', body: JSON.stringify({ base_tree: base.tree.sha, tree }) });
+    const c = await gh(token, 'git/commits', { method: 'POST', body: JSON.stringify({ message: `Add email signature images for ${p.name}`, tree: t.sha, parents: [head.object.sha] }) });
+    await gh(token, `git/refs/heads/${BRANCH}`, { method: 'PATCH', body: JSON.stringify({ sha: c.sha }) });
+
+    // wait until GitHub Pages serves the new top.png (same size as the one just uploaded)
+    const want = files[0].blob.size, url = `${BASE}people/${slug(p.name)}/${pieceFile('top')}`;
+    for (let i = 0; i < 36; i++) {
+      status(`Committed. Waiting for GitHub Pages to publish… (${i * 5}s)`);
+      const r = await fetch(`${url}?check=${Date.now()}`, { cache: 'no-store' }).catch(() => null);
+      if (r && r.ok && (await r.blob()).size === want) {
+        st.version = c.sha.slice(0, 7); update();
+        return status(`Published for ${p.name}. Now click "Copy signature".`);
+      }
+      await new Promise(r => setTimeout(r, 5000));
+    }
+    st.version = c.sha.slice(0, 7); update();
+    status('Committed, but GitHub Pages is slow to publish. Wait a minute, then click "Copy signature".');
+  } catch (e) {
+    status(`Publishing failed: ${e.message}.`);
+  } finally { btn.disabled = false; }
+}
+document.getElementById('publish').onclick = publish;
+document.getElementById('dlHtml').onclick = () => { const p = person(); download(new Blob([htmlDoc(p)], { type: 'text/html' }), `signature-${slug(p.name)}.html`); };
+document.getElementById('copy').onclick = async () => {
+  const html = signatureHtml(person());
+  try {
+    await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([html], { type: 'text/plain' }) })]);
+    status('Signature copied. Paste it into Gmail → Settings → Signature. (Images show once uploaded to GitHub.)');
+  } catch (e) { status('Copy was blocked by the browser. Use "Download signature .html", open it, select all and copy.'); }
+};
+document.getElementById('darkToggle').onchange = e => document.getElementById('preview').classList.toggle('dark', e.target.checked);
+
+f.addEventListener('input', update);
+f.photo.addEventListener('change', () => {
+  const file = f.photo.files[0]; if (!file) return;
+  const i = new Image();
+  i.onload = () => {
+    const c = document.createElement('canvas'); c.width = i.naturalWidth; c.height = i.naturalHeight;
+    const x = c.getContext('2d'); x.drawImage(i, 0, 0);
+    st.photoIsCutout = x.getImageData(1, 1, 1, 1).data[3] === 0; // transparent corner = already a round cut-out
+    st.photo = i; f.zoom.value = 1; f.dx.value = 0; f.dy.value = 0; update();
+  };
+  i.src = URL.createObjectURL(file);
+});
+
+(async () => {
+  try {
+    await Promise.all(['400', '500', '700'].map(w => document.fonts.load(`${w} 24px Poppins`)));
+    const files = { topLeft: 'sig-top-left.png', topRight: 'sig-top-right.png', photoBg: 'sig-photo-bg.png', left: 'sig-left.png', midA: 'sig-mid-a.png', midD: 'sig-mid-d.png', right: 'sig-right.png',
+      iconPhone: 'icon-phone.png', iconEmail: 'icon-email.png', iconWeb: 'icon-website.png', ig: 'social-instagram.png', fb: 'social-facebook.png', li: 'social-linkedin.png', wa: 'social-whatsapp.png' };
+    const entries = await Promise.all(Object.entries(files).map(async ([k, v]) => [k, await load(BASE + v)]));
+    st.assets = Object.fromEntries(entries);
+    st.assets.defaultPhoto = await load('https://mgplorg.github.io/email-signature/assets/images/profile-photo.png');
+    update();
+  } catch (e) { status('Could not load the shared images from GitHub (' + e.message + '). Check your connection.'); }
+})();
+</script>
+</body>
+</html>
