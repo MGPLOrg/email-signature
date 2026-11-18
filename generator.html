@@ -85,6 +85,11 @@
 </main>
 
 <script>
+// Show script errors on the page itself (the Apps Script helper hides the browser console).
+window.addEventListener('error', e => { document.getElementById('status').textContent = `Page error: ${e.message} (line ${e.lineno})`; });
+window.addEventListener('unhandledrejection', e => { document.getElementById('status').textContent = `Page error: ${e.reason && e.reason.message || e.reason}`; });
+</script>
+<script>
 const BASE = 'https://mgplorg.github.io/email-signature/assets/email/';
 const W = 700, H = 200, S = 2; // design size; images are exported at 2x
 const f = document.getElementById('f');
