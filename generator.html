@@ -46,7 +46,9 @@
     <label>Role <input type="text" name="role" value="Co-Founder &amp; Business Head" required></label>
     <label>Phone (as shown) <input type="tel" name="phone" value="+91 94480 30000" required></label>
     <label>Email <input type="email" name="email" value="shikhar@arthproject.com" required></label>
-    <label class="full">Photo (a round cut-out exported from Figma is used as is; any other photo is cropped to a circle) <input type="file" name="photo" accept="image/*"></label>
+    <label>Photo from GitHub (<a href="https://github.com/MGPLOrg/email-signature/tree/main/assets/photos" target="_blank">assets/photos</a>) <select name="photoPick"><option value="">Loading photos…</option></select></label>
+    <label>…or a photo from this device <input type="file" name="photo" accept="image/*"></label>
+    <p class="full" style="margin:0; color:var(--slate); font-size:13px;">A round cut-out exported from Figma is used as is; any other photo is cropped to a circle (adjust it with the sliders).</p>
     <div class="full sliders">
       <label>Zoom <input type="range" name="zoom" min="1" max="3" step="0.01" value="1"></label>
       <label>Left / right <input type="range" name="dx" min="-50" max="50" step="1" value="0"></label>
@@ -74,7 +76,7 @@
 
   <h2>Steps</h2>
   <ol>
-    <li>Fill in the details and choose a photo from this device (on a phone you can take one with the camera).</li>
+    <li>Fill in the details and choose a photo from the list, or from this device. To add a photo to the list, upload it on GitHub to <a href="https://github.com/MGPLOrg/email-signature/tree/main/assets/photos" target="_blank">assets/photos</a> (Add file → Upload files) and reload this page.</li>
     <li class="token-step">Paste a GitHub token once (tick <em>Remember</em> to skip this next time).</li>
     <li>Click <strong>Copy signature</strong>. If the photo or details changed, the page first uploads the new images to <code id="folder">assets/email/people/shikhar-parekh/</code> and waits until they are online (about a minute), then copies. Gmail loads the pictures from there, so they must be online first.<br>
       No token? Use <strong>Download the 4 images</strong>, upload them to that folder on GitHub by hand, wait a minute, then click Copy.</li>
@@ -363,17 +365,39 @@ if (helper) {
 document.getElementById('darkToggle').onchange = e => document.getElementById('preview').classList.toggle('dark', e.target.checked);
 
 f.addEventListener('input', update);
+function usePhoto(i) {
+  const c = document.createElement('canvas'); c.width = i.naturalWidth; c.height = i.naturalHeight;
+  const x = c.getContext('2d'); x.drawImage(i, 0, 0);
+  st.photoIsCutout = x.getImageData(1, 1, 1, 1).data[3] === 0; // transparent corner = already a round cut-out
+  st.photo = i; f.zoom.value = 1; f.dx.value = 0; f.dy.value = 0; update();
+}
 f.photo.addEventListener('change', () => {
   const file = f.photo.files[0]; if (!file) return;
+  f.photoPick.value = '';
   const i = new Image();
-  i.onload = () => {
-    const c = document.createElement('canvas'); c.width = i.naturalWidth; c.height = i.naturalHeight;
-    const x = c.getContext('2d'); x.drawImage(i, 0, 0);
-    st.photoIsCutout = x.getImageData(1, 1, 1, 1).data[3] === 0; // transparent corner = already a round cut-out
-    st.photo = i; f.zoom.value = 1; f.dx.value = 0; f.dy.value = 0; update();
-  };
+  i.onload = () => usePhoto(i);
   i.src = URL.createObjectURL(file);
 });
+f.photoPick.addEventListener('change', async () => {
+  if (!f.photoPick.value) return;
+  f.photo.value = '';
+  try { usePhoto(await load(f.photoPick.value)); }
+  catch (e) { status('Could not load that photo from GitHub. Try again in a moment.'); }
+});
+// Photos uploaded to assets/photos/ on GitHub show up here straight away (the folder listing is public, no token needed).
+(async () => {
+  const sel = f.photoPick;
+  try {
+    const r = await fetch(`https://api.github.com/repos/${REPO}/contents/assets/photos?ref=${BRANCH}`, { cache: 'no-store' });
+    if (!r.ok) throw new Error(r.status);
+    const photos = (await r.json()).filter(x => x.type === 'file' && /\.(png|jpe?g|webp)$/i.test(x.name));
+    const label = n => n.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    sel.innerHTML = '<option value="">Choose a photo…</option>' +
+      photos.map(x => `<option value="${esc(x.download_url)}">${esc(label(x.name))}</option>`).join('');
+  } catch (e) {
+    sel.innerHTML = '<option value="">Could not list the photos (reload to try again)</option>';
+  }
+})();
 
 (async () => {
   try {
