@@ -58,13 +58,14 @@
   <h2>Preview <label style="display:inline-flex; gap:6px; font-weight:normal; font-size:13px; margin-left:12px;"><input type="checkbox" id="darkToggle"> dark background</label></h2>
   <div class="preview" id="preview"></div>
   <form class="publish" id="pub" autocomplete="off" onsubmit="return false">
-    <label class="full">GitHub token (fine-grained, <em>Contents: read and write</em> on MGPLOrg/email-signature; used only for this upload and never saved)
+    <label class="full">GitHub token (fine-grained, <em>Contents: read and write</em> on MGPLOrg/email-signature; used only to upload the images)
       <input type="password" name="token" placeholder="github_pat_…" autocomplete="off" spellcheck="false">
     </label>
+    <label class="full" style="font-weight:normal; display:flex; gap:6px; align-items:center;"><input type="checkbox" name="remember"> Remember the token on this device (only on your own computer)</label>
   </form>
   <div class="actions">
-    <button type="button" id="publish">1. Publish images to GitHub</button>
-    <button type="button" id="copy">2. Copy signature</button>
+    <button type="button" id="copy">Copy signature</button>
+    <button type="button" class="secondary" id="publish">Upload images only</button>
     <button type="button" class="secondary" id="dlImages">Download the 4 images</button>
     <button type="button" class="secondary" id="dlHtml">Download signature .html</button>
   </div>
@@ -73,9 +74,10 @@
   <h2>Steps</h2>
   <ol>
     <li>Fill in the details and choose a photo from this device (on a phone you can take one with the camera).</li>
-    <li>Paste a GitHub token and click <strong>Publish images to GitHub</strong>. The page uploads this person's 4 images to <code id="folder">assets/email/people/shikhar-parekh/</code> and waits until GitHub Pages serves them (about a minute).<br>
-      No token? Use <strong>Download the 4 images</strong> and upload them to that folder on GitHub by hand.</li>
-    <li>Click <strong>Copy signature</strong> and paste it into Gmail → Settings → Signature.</li>
+    <li>Paste a GitHub token once (tick <em>Remember</em> to skip this next time).</li>
+    <li>Click <strong>Copy signature</strong>. If the photo or details changed, the page first uploads the new images to <code id="folder">assets/email/people/shikhar-parekh/</code> and waits until they are online (about a minute), then copies. Gmail loads the pictures from there, so they must be online first.<br>
+      No token? Use <strong>Download the 4 images</strong>, upload them to that folder on GitHub by hand, wait a minute, then click Copy.</li>
+    <li>Paste into Gmail → Settings → Signature, replacing the old one, and save.</li>
   </ol>
 </main>
 
@@ -250,48 +252,56 @@ async function gh(token, path, opts = {}) {
 }
 const toBase64 = blob => new Promise(ok => { const fr = new FileReader(); fr.onload = () => ok(fr.result.split(',')[1]); fr.readAsDataURL(blob); });
 
-async function publish() {
-  const token = document.getElementById('pub').token.value.trim();
-  if (!token) return status('Paste a GitHub token first, or use "Download the 4 images" and upload them by hand.');
-  const p = person(), dir = `assets/email/people/${slug(p.name)}`;
-  const btn = document.getElementById('publish'); btn.disabled = true;
-  try {
-    status('Uploading to GitHub…');
-    const files = [];
-    for (const k of ownPieces()) files.push({ path: `${dir}/${pieceFile(k)}`, blob: await blobOf(cut(st.full, k)) });
-    const head = await gh(token, `git/ref/heads/${BRANCH}`);
-    const base = await gh(token, `git/commits/${head.object.sha}`);
-    const tree = [];
-    for (const fl of files) {
-      const b = await gh(token, 'git/blobs', { method: 'POST', body: JSON.stringify({ content: await toBase64(fl.blob), encoding: 'base64' }) });
-      tree.push({ path: fl.path, mode: '100644', type: 'blob', sha: b.sha });
-    }
-    const t = await gh(token, 'git/trees', { method: 'POST', body: JSON.stringify({ base_tree: base.tree.sha, tree }) });
-    const c = await gh(token, 'git/commits', { method: 'POST', body: JSON.stringify({ message: `Add email signature images for ${p.name}`, tree: t.sha, parents: [head.object.sha] }) });
-    await gh(token, `git/refs/heads/${BRANCH}`, { method: 'PATCH', body: JSON.stringify({ sha: c.sha }) });
-
-    // wait until GitHub Pages serves the new top.png (same size as the one just uploaded)
-    const want = files[0].blob.size, url = `${BASE}people/${slug(p.name)}/${pieceFile('top')}`;
-    for (let i = 0; i < 36; i++) {
-      status(`Committed. Waiting for GitHub Pages to publish… (${i * 5}s)`);
-      const r = await fetch(`${url}?check=${Date.now()}`, { cache: 'no-store' }).catch(() => null);
-      if (r && r.ok && (await r.blob()).size === want) {
-        return status(`Published for ${p.name}. Now click "Copy signature".`);
-      }
-      await new Promise(r => setTimeout(r, 5000));
-    }
-    status('Committed, but GitHub Pages is slow to publish. Wait a minute, then click "Copy signature".');
-  } catch (e) {
-    status(`Publishing failed: ${e.message}.`);
-  } finally { btn.disabled = false; }
+// Upload this person's pieces as one commit, then wait until GitHub Pages serves them.
+async function upload(token, p, full) {
+  status('Uploading the new images to GitHub…');
+  const dir = `assets/email/people/${slug(p.name)}`, tree = [];
+  const head = await gh(token, `git/ref/heads/${BRANCH}`);
+  const base = await gh(token, `git/commits/${head.object.sha}`);
+  for (const k of ownPieces()) {
+    const b = await gh(token, 'git/blobs', { method: 'POST', body: JSON.stringify({ content: await toBase64(await blobOf(cut(full, k))), encoding: 'base64' }) });
+    tree.push({ path: `${dir}/${pieceFile(k)}`, mode: '100644', type: 'blob', sha: b.sha });
+  }
+  const t = await gh(token, 'git/trees', { method: 'POST', body: JSON.stringify({ base_tree: base.tree.sha, tree }) });
+  const c = await gh(token, 'git/commits', { method: 'POST', body: JSON.stringify({ message: `Add email signature images for ${p.name}`, tree: t.sha, parents: [head.object.sha] }) });
+  await gh(token, `git/refs/heads/${BRANCH}`, { method: 'PATCH', body: JSON.stringify({ sha: c.sha }) });
+  for (let i = 0; i < 36; i++) {
+    status(`Uploaded. Waiting for the images to go online… (${i * 5}s, usually under a minute)`);
+    if (!(await stalePieces(p, full)).length) return;
+    await new Promise(r => setTimeout(r, 5000));
+  }
+  throw new Error('GitHub Pages is slow to publish; wait a minute and click Copy signature again');
 }
-document.getElementById('publish').onclick = publish;
+// Make sure GitHub serves exactly the pieces on screen, uploading them if needed.
+async function ensureOnline(p, full) {
+  status('Checking that GitHub has the latest images…');
+  if (!(await stalePieces(p, full)).length) return;
+  const token = tokenValue();
+  if (!token) throw new Error('the photo or details changed, so the new images must be uploaded first. Paste a GitHub token above (or upload the downloaded images by hand and wait a minute)');
+  await upload(token, p, full);
+}
+const pub = document.getElementById('pub');
+const tokenValue = () => {
+  const t = pub.token.value.trim();
+  try { pub.remember.checked && t ? localStorage.setItem('arthToken', t) : localStorage.removeItem('arthToken'); } catch (e) {}
+  return t;
+};
+try { const t = localStorage.getItem('arthToken'); if (t) { pub.token.value = t; pub.remember.checked = true; } } catch (e) {}
+pub.remember.onchange = tokenValue;
+
+const busy = on => ['copy', 'publish'].forEach(id => { document.getElementById(id).disabled = on; });
+document.getElementById('publish').onclick = async () => {
+  const p = person(); busy(true);
+  try { await ensureOnline(p, st.full); status(`The images for ${p.name} are online. Click "Copy signature".`); }
+  catch (e) { status(`Not uploaded: ${e.message}.`); }
+  finally { busy(false); }
+};
 document.getElementById('dlHtml').onclick = () => { const p = person(); download(new Blob([htmlDoc(p)], { type: 'text/html' }), `signature-${slug(p.name)}.html`); };
 // The copied signature links to the images on GitHub, so check GitHub already serves what the preview shows.
-async function stalePieces(p) {
+async function stalePieces(p, full) {
   const stale = [];
   for (const k of ownPieces()) {
-    const mine = cut(st.full, k), w = mine.width, h = mine.height;
+    const mine = cut(full, k), w = mine.width, h = mine.height;
     const theirs = await load(`${BASE}people/${slug(p.name)}/${pieceFile(k)}?check=${Date.now()}`).catch(() => null);
     if (!theirs) { stale.push(k); continue; }
     const c = document.createElement('canvas'); c.width = w; c.height = h;
@@ -304,21 +314,20 @@ async function stalePieces(p) {
   return stale;
 }
 document.getElementById('copy').onclick = async () => {
-  const p = person(), html = signatureHtml(p);
-  status('Checking that GitHub has the latest images…');
-  // Clipboard data is given as promises so the browser keeps the click's permission while the check runs.
-  const ready = stalePieces(p).then(stale => {
-    if (stale.length) throw Object.assign(new Error(), { stale });
-  });
+  // Snapshot what is on screen now, so edits made while uploading do not mix in.
+  const p = person(), full = st.full, html = signatureHtml(p);
+  busy(true);
+  // Clipboard data is given as promises so the browser keeps the click's permission while the upload runs.
+  const ready = ensureOnline(p, full);
   const blob = type => ready.then(() => new Blob([html], { type }));
   try {
     await navigator.clipboard.write([new ClipboardItem({ 'text/html': blob('text/html'), 'text/plain': blob('text/plain') })]);
-    status('Signature copied. Paste it into Gmail → Settings → Signature.');
+    status(`Signature for ${p.name} copied, exactly as in the preview. Paste it into Gmail → Settings → Signature and save.`);
   } catch (e) {
-    const stale = await ready.then(() => null, e => e.stale);
-    if (stale) status(`Not copied: GitHub still has the old ${stale.map(pieceFile).join(', ')} for ${p.name}, so Gmail would show the old photo or details. Click "Publish images to GitHub" first (or upload the downloaded images by hand and wait a minute), then copy again.`);
-    else status('Copy was blocked by the browser. Use "Download signature .html", open it, select all and copy.');
-  }
+    const failed = await ready.then(() => null, e => e);
+    if (failed) status(`Not copied: ${failed.message}.`);
+    else status('The images are online now, but the browser did not allow copying after the wait. Click "Copy signature" once more; it copies straight away.');
+  } finally { busy(false); }
 };
 document.getElementById('darkToggle').onchange = e => document.getElementById('preview').classList.toggle('dark', e.target.checked);
 
