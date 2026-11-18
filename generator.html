@@ -64,6 +64,7 @@
     <label class="full" style="font-weight:normal; display:flex; gap:6px; align-items:center;"><input type="checkbox" name="remember"> Remember the token on this device (only on your own computer)</label>
   </form>
   <div class="actions">
+    <button type="button" id="setGmail" hidden>Set as my Gmail signature</button>
     <button type="button" id="copy">Copy signature</button>
     <button type="button" class="secondary" id="publish">Upload images only</button>
     <button type="button" class="secondary" id="dlImages">Download the 4 images</button>
@@ -74,7 +75,7 @@
   <h2>Steps</h2>
   <ol>
     <li>Fill in the details and choose a photo from this device (on a phone you can take one with the camera).</li>
-    <li>Paste a GitHub token once (tick <em>Remember</em> to skip this next time).</li>
+    <li class="token-step">Paste a GitHub token once (tick <em>Remember</em> to skip this next time).</li>
     <li>Click <strong>Copy signature</strong>. If the photo or details changed, the page first uploads the new images to <code id="folder">assets/email/people/shikhar-parekh/</code> and waits until they are online (about a minute), then copies. Gmail loads the pictures from there, so they must be online first.<br>
       No token? Use <strong>Download the 4 images</strong>, upload them to that folder on GitHub by hand, wait a minute, then click Copy.</li>
     <li>Paste into Gmail → Settings → Signature, replacing the old one, and save.</li>
@@ -272,10 +273,20 @@ async function upload(token, p, full) {
   }
   throw new Error('GitHub Pages is slow to publish; wait a minute and click Copy signature again');
 }
+// Opened through the Arth Apps Script helper: it uploads without a token and can set the Gmail signature.
+const helper = window.google && google.script && google.script.run;
+const server = (fn, ...args) => new Promise((ok, err) => google.script.run.withSuccessHandler(ok).withFailureHandler(e => err(new Error(e.message || e)))[fn](...args));
+
 // Make sure GitHub serves exactly the pieces on screen, uploading them if needed.
 async function ensureOnline(p, full) {
   status('Checking that GitHub has the latest images…');
   if (!(await stalePieces(p, full)).length) return;
+  if (helper) {
+    status('Uploading the new images and waiting for them to go online… (usually under a minute)');
+    const files = {};
+    for (const k of ownPieces()) files[pieceFile(k)] = await toBase64(await blobOf(cut(full, k)));
+    return server('upload', p.name, slug(p.name), files);
+  }
   const token = tokenValue();
   if (!token) throw new Error('the photo or details changed, so the new images must be uploaded first. Paste a GitHub token above (or upload the downloaded images by hand and wait a minute)');
   await upload(token, p, full);
@@ -289,7 +300,7 @@ const tokenValue = () => {
 try { const t = localStorage.getItem('arthToken'); if (t) { pub.token.value = t; pub.remember.checked = true; } } catch (e) {}
 pub.remember.onchange = tokenValue;
 
-const busy = on => ['copy', 'publish'].forEach(id => { document.getElementById(id).disabled = on; });
+const busy = on => ['copy', 'publish', 'setGmail'].forEach(id => { document.getElementById(id).disabled = on; });
 document.getElementById('publish').onclick = async () => {
   const p = person(); busy(true);
   try { await ensureOnline(p, st.full); status(`The images for ${p.name} are online. Click "Copy signature".`); }
@@ -329,6 +340,26 @@ document.getElementById('copy').onclick = async () => {
     else status('The images are online now, but the browser did not allow copying after the wait. Click "Copy signature" once more; it copies straight away.');
   } finally { busy(false); }
 };
+if (helper) {
+  pub.hidden = true;
+  document.querySelectorAll('.token-step').forEach(li => { li.hidden = true; });
+  const btn = document.getElementById('setGmail');
+  btn.hidden = false;
+  server('me').then(email => { st.me = email; btn.textContent = `Set as Gmail signature for ${email}`; }).catch(() => {});
+  btn.onclick = async () => {
+    const p = person(), full = st.full, html = signatureHtml(p);
+    if (st.me && p.email && p.email.toLowerCase() !== st.me.toLowerCase() &&
+        !confirm(`You are signed in as ${st.me}, so this replaces YOUR Gmail signature with ${p.name}'s. For someone else, use "Copy signature" instead. Continue?`)) return;
+    busy(true);
+    try {
+      await ensureOnline(p, full);
+      status('Setting the Gmail signature…');
+      const email = await server('setMySignature', html);
+      status(`Done: ${email} now uses this signature. In Gmail, reload and check Settings → Signature → Signature defaults.`);
+    } catch (e) { status(`Not set: ${e.message}.`); }
+    finally { busy(false); }
+  };
+}
 document.getElementById('darkToggle').onchange = e => document.getElementById('preview').classList.toggle('dark', e.target.checked);
 
 f.addEventListener('input', update);
