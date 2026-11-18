@@ -91,21 +91,21 @@ function signatureHtml(p) {
     ? img(st.photo.url, 106, 106, p.name)
     : img(st.photo.url, 102, 102, p.name, ' border:2px solid #ffffff; border-radius:53px;');
   const contact = (icon, label, href) => `<tr>
-          <td width="22" height="20" valign="top" style="${CELL}">${img(SHARED + icon, 16, 16)}</td>
-          <td valign="top" style="padding:1px 0 0 0; font-family:${FONT}; font-size:10px; line-height:14px; color:#16391c; white-space:nowrap;">${link(href, esc(label))}</td>
+          <td width="22" height="20" valign="top" bgcolor="#ffffff" style="${CELL} background-color:#ffffff;">${img(SHARED + icon, 16, 16)}</td>
+          <td valign="top" bgcolor="#ffffff" style="padding:1px 0 0 0; background-color:#ffffff; font-family:${FONT}; font-size:10px; line-height:14px; color:#16391c; white-space:nowrap;">${link(href, esc(label))}</td>
         </tr>`;
   const social = (file, w, href, alt) => `<td style="${CELL}">${link(href, img(SHARED + 'shared/' + file, w, 24, alt))}</td>`;
-  return `<table cellpadding="0" cellspacing="0" border="0" width="700" style="width:700px; border-collapse:collapse; mso-table-lspace:0; mso-table-rspace:0;">
+  return `<table cellpadding="0" cellspacing="0" border="0" width="700" bgcolor="#ffffff" style="width:700px; border-collapse:collapse; background-color:#ffffff; mso-table-lspace:0; mso-table-rspace:0;">
 <tr>
   <td width="297" valign="top" style="${CELL}">
     <table cellpadding="0" cellspacing="0" border="0" width="297" style="border-collapse:collapse;">
       <tr><td colspan="3" style="${CELL}">${link('https://arthproject.com', img(SHARED + 'sig-top-left.png', 297, 104, 'arth — Making Property Click'))}</td></tr>
       <tr>
         <td rowspan="2" width="26" valign="top" style="${CELL}">${img(SHARED + 'sig-left.png', 26, 96)}</td>
-        <td width="236" height="50" valign="top" style="padding:0 0 0 2px;">${text(p.name, 24, 30, 700, '#16391c')}${text(p.role, 12, 18, 500, '#4a5a4c')}</td>
+        <td width="236" height="50" valign="top" bgcolor="#ffffff" style="padding:0 0 0 2px; background-color:#ffffff;">${text(p.name, 24, 30, 700, '#16391c')}${text(p.role, 12, 18, 500, '#4a5a4c')}</td>
         <td width="35" valign="top" style="${CELL}">${img(SHARED + 'sig-mid-a.png', 35, 50)}</td>
       </tr>
-      <tr><td colspan="2" width="271" height="46" valign="top" style="padding:6px 7px 0 2px; font-family:${FONT}; font-size:8px; line-height:11.5px; color:#4a5a4c;">${esc(ADDRESS)}</td></tr>
+      <tr><td colspan="2" width="271" height="46" valign="top" bgcolor="#ffffff" style="padding:6px 7px 0 2px; background-color:#ffffff; font-family:${FONT}; font-size:8px; line-height:11.5px; color:#4a5a4c;">${esc(ADDRESS)}</td></tr>
     </table>
   </td>
   <td width="106" valign="top" style="${CELL}">
@@ -120,13 +120,13 @@ function signatureHtml(p) {
       <tr><td colspan="3" style="${CELL}">${img(SHARED + 'sig-top-right.png', 297, 104)}</td></tr>
       <tr>
         <td width="89" valign="top" style="${CELL}">${img(SHARED + 'sig-mid-d.png', 89, 96)}</td>
-        <td width="164" valign="top" style="padding:2px 0 0 0;">
-          <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
+        <td width="164" valign="top" bgcolor="#ffffff" style="padding:2px 0 0 0; background-color:#ffffff;">
+          <table cellpadding="0" cellspacing="0" border="0" width="164" bgcolor="#ffffff" style="width:164px; border-collapse:collapse; background-color:#ffffff;">
         ${contact('icon-phone.png', p.phone, 'tel:+' + digits(p.phone))}
         ${contact('icon-email.png', p.email, 'mailto:' + p.email)}
         ${contact('icon-website.png', 'arthproject.com', 'https://arthproject.com')}
           </table>
-          <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
+          <table cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="border-collapse:collapse; background-color:#ffffff;">
             <tr>
               ${social('ig.png', 22, 'https://www.instagram.com/the.arth.project/', 'Instagram')}
               ${social('fb.png', 20, 'https://www.facebook.com/share/1G9WyW885T/', 'Facebook')}
