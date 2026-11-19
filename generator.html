@@ -27,9 +27,12 @@
   .warn:empty { display: none; }
   h2 { font-size: 15px; margin: 24px 0 8px; }
   .preview { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; padding: 16px; background: #fff; }
-  .preview.dark { background: #202124; }
-  .preview.dark table, .preview.dark td { background-color: #202124 !important; }
-  .preview.dark div, .preview.dark td, .preview.dark a { color: #e8eaed !important; }
+  /* Gmail on a computer shows the email as it is on a dark page; the Gmail phone apps also darken backgrounds and lighten text */
+  .preview.web-dark, .preview.app-dark { background: #202124; }
+  .preview.app-dark table, .preview.app-dark td { background-color: #202124 !important; }
+  .preview.app-dark div, .preview.app-dark td, .preview.app-dark a { color: #e8eaed !important; }
+  .modes { display: inline-flex; gap: 12px; margin-left: 12px; font-weight: normal; font-size: 13px; }
+  .modes label { display: inline-flex; gap: 4px; align-items: center; font-weight: normal; }
   .actions { margin-top: 12px; }
   button { font: inherit; font-weight: bold; padding: 9px 14px; border: 0; border-radius: 8px; background: var(--forest); color: #fff; cursor: pointer; }
   ol { padding-left: 20px; color: var(--slate); }
@@ -55,7 +58,11 @@
     <p class="warn" id="warn"></p>
   </form>
 
-  <h2>Preview <label style="display:inline-flex; gap:6px; font-weight:normal; font-size:13px; margin-left:12px;"><input type="checkbox" id="darkToggle"> dark mode (as in the Gmail app)</label></h2>
+  <h2>Preview <span class="modes" id="modes">
+    <label><input type="radio" name="mode" value="" checked> Light</label>
+    <label><input type="radio" name="mode" value="web-dark"> Dark mode, Gmail on computer</label>
+    <label><input type="radio" name="mode" value="app-dark"> Dark mode, Gmail phone app</label>
+  </span></h2>
   <div class="preview" id="preview"></div>
   <div class="actions"><button type="button" id="copy">Copy signature</button></div>
   <p class="status" id="status" role="status"></p>
@@ -173,7 +180,7 @@ function choosePhoto(url) {
 
 f.addEventListener('input', e => { if (e.target.name !== 'photo') update(); });
 f.photo.addEventListener('change', () => { if (f.photo.value) choosePhoto(f.photo.value); else { st.photo = null; update(); } });
-document.getElementById('darkToggle').onchange = e => document.getElementById('preview').classList.toggle('dark', e.target.checked);
+document.getElementById('modes').onchange = e => { document.getElementById('preview').className = 'preview ' + e.target.value; };
 
 document.getElementById('copy').onclick = async () => {
   const p = person();
