@@ -102,7 +102,7 @@ const a = (href, inner) => `<a href="${esc(href)}" target="_blank" style="text-d
 
 // One row of character pictures, filled to the row's width with a stretched filler picture (never a coloured cell).
 function letters(style, str, width, before = [], after = []) {
-  const w = st.metrics.widths[style], height = style === 'n' ? 30 : 20;
+  const w = st.metrics.widths[style], height = st.metrics.heights[style];
   let used = 0, out = '', cut = false;
   for (const [name, pw] of before) { out += inl(name, pw); used += pw; }
   const tail = after.reduce((sum, [, pw]) => sum + pw, 0);
@@ -120,8 +120,8 @@ function letters(style, str, width, before = [], after = []) {
 function signatureHtml(p) {
   const m = st.metrics;
   const ownDomain = p.email.toLowerCase().endsWith(DOMAIN), ownPrefix = p.phone.startsWith(PREFIX);
-  const name = letters('n', p.name, 236);
-  const role = letters('r', p.role, 236);
+  const name = letters('h', p.name, 236);  // name row 33px: room for the tails of g, j, p, q, y
+  const role = letters('s', p.role, 236);
   const phone = letters('c', ownPrefix ? p.phone.slice(PREFIX.length) : p.phone, 164,
     [['c-phone-icon', 22], ...(ownPrefix ? [['c-plus', m.plus]] : [])]);
   const email = letters('c', ownDomain ? p.email.slice(0, -DOMAIN.length) : p.email, 164,

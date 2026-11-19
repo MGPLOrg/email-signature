@@ -10,7 +10,9 @@ stays white in every dark mode. All pictures are opaque, drawn at 2x, and none i
 Output (all in g/):
   fixed pieces   a-top, a-left, a-mid, a-addr, b-top, b-blank (photo area), b-bottom, c-top, c-left, c-right,
                  c-phone-icon, c-email-icon, c-at, c-plus, c-web, c-social-*, c-bottom
-  characters     <style><code>.png, style n = name, r = role, c = contacts; code = char code
+  characters     <style><code>.png, style h = name, s = role, c = contacts; code = char code
+                 (n and r are the first name/role rows, 30 and 20px, where tails of g, j, p, q, y were
+                 cut off; no longer drawn, but kept so signatures pasted before stay intact)
   fillers        fill-<height>.png (stretched to fill the rest of a text row)
   metrics.json   width of every character picture and the layout the generator needs
 """
@@ -31,8 +33,8 @@ CHARS = [chr(c) for c in range(32, 127)]
 # style: font weight, size, colour, row height, baseline from the row's top (browser placement:
 # Poppins ascent 1.05em, line gap 0.1em, so with line-height normal the baseline is 1.1em below the top)
 STYLES = {
-    "n": ("Bold", 24, FOREST, 30, 1.1 * 24),        # name: top 104, row 104-134
-    "r": ("Medium", 12, SLATE, 20, 2 + 1.1 * 12),    # role: top 136, row 134-154
+    "h": ("Bold", 24, FOREST, 33, 1.1 * 24),        # name: top 104, row 104-137 (letter tails reach 32.9px)
+    "s": ("Medium", 12, SLATE, 17, -1 + 1.1 * 12),   # role: top 136, row 137-154 (the text itself does not move)
     "c": ("Regular", 10, FOREST, 20, 1 + 1.1 * 10),  # phone/email: top = row top + 1, rows 106-126 and 126-146
 }
 
@@ -130,7 +132,7 @@ def main():
         fill = Image.new("RGB", (8, row * S), WHITE)
         mark(fill).save(OUT / f"fill-{row}.png", optimize=True)
     meta = {"widths": widths, "plus": plus_w, "at": at_w,
-            "rows": {"n": 236, "r": 236, "c": 142}}  # usable width of each text row
+            "heights": {key: style[3] for key, style in STYLES.items()}}
     (OUT / "metrics.json").write_text(json.dumps(meta, separators=(",", ":")), encoding="utf-8")
     print("drew", len(list(OUT.glob("*.png"))), "pictures")
 
