@@ -8,9 +8,6 @@
   if (!/[?&]v=/.test(location.search)) location.replace(location.pathname + '?v=' + Date.now() + location.hash);
 </script>
 <title>Arth Signature Generator</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root { --lime: #a3c553; --forest: #16391c; --slate: #4a5a4c; --line: #d9e3cc; }
   * { box-sizing: border-box; }
@@ -44,7 +41,7 @@
 <body>
 <main>
   <h1>Arth email signature generator</h1>
-  <p class="lead">Fill in the details and choose a photo. <strong>Copy signature</strong> copies exactly what the preview shows, straight away.</p>
+  <p class="lead">Fill in the details and choose a photo. <strong>Copy signature</strong> copies exactly what the preview shows, straight away. The signature is made entirely of pictures, so it stays white in dark mode in Gmail on computer and phone.</p>
 
   <form id="f" autocomplete="off" onsubmit="return false">
     <label>Full name <input type="text" name="name" value="" placeholder="e.g. Shikhar Parekh"></label>
@@ -60,13 +57,11 @@
 
   <h2>Preview <span class="modes" id="modes">
     <label><input type="radio" name="mode" value="" checked> Light</label>
-    <label><input type="radio" name="mode" value="web-dark"> Dark mode, Gmail on computer</label>
-    <label><input type="radio" name="mode" value="app-dark"> Dark mode, Gmail phone app</label>
+    <label><input type="radio" name="mode" value="app-dark"> Dark mode (Gmail on computer and phone)</label>
   </span></h2>
   <div class="preview" id="preview"></div>
   <div class="actions"><button type="button" id="copy">Copy signature</button></div>
   <p class="status" id="status" role="status"></p>
-  <p class="status" id="phoneMode"></p>
 
   <h2>Steps</h2>
   <ol>
@@ -77,105 +72,95 @@
 </main>
 
 <script>
-// Builds the signature as an email-safe table: the typed details are real text, the decoration comes from
-// shared images on GitHub Pages and the photo straight from assets/photos, so nothing has to be uploaded
-// and the copied signature always matches the preview.
+// The signature is built entirely from pictures on GitHub Pages, so the Gmail phone apps (which recolour
+// text and backgrounds in dark mode, but never pictures) show it white like Gmail on a computer:
+// fixed pieces of the card, one picture per character for the typed details, and the photo.
+// They are made by .github/scripts/make_letter_pieces.py; nothing is uploaded per person.
 const PAGES = 'https://mgplorg.github.io/email-signature/';
-const SHARED = PAGES + 'assets/email/';
-// Decoration with a transparent card area, so Gmail's dark mode darkens the card evenly (see .github/scripts/make_dark_mode_pieces.py).
-const DM = SHARED + 'dm/';
+const G = PAGES + 'g/';  // short address: the signature is made of ~60 letter pictures and Gmail limits its length
 const REPO = 'MGPLOrg/email-signature', BRANCH = 'main';
 const ADDRESS = 'Manpho Stambh, 1st Main Rd, opposite Shri Vasupujya Swami Jain Temple, Hebbal, Bengaluru, Karnataka 560032';
-const FONT = 'Poppins, Arial, Helvetica, sans-serif';
+const DOMAIN = '@arthproject.com', PREFIX = '+91 ';
+const GMAIL_LIMIT = 9500;  // Gmail refuses signatures over 10,000 characters; keep a margin
 const f = document.getElementById('f');
 // Email-ready photos (photo on its background, made by .github/workflows/prepare-photos.yml), since Gmail ignores background images.
 const emailPhoto = (name, sha = '') => PAGES + 'assets/photos/email/' + encodeURIComponent(name.replace(/\.[^.]+$/, '')) + '.png' + (sha ? '?v=' + sha.slice(0, 7) : '');
-const st = { photo: null };
+const st = { photo: null, metrics: null };
 
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const digits = s => s.replace(/[^0-9]/g, '');
 const status = t => { document.getElementById('status').textContent = t; };
 const person = () => ({ name: f.name.value.trim(), role: f.role.value.trim(), phone: f.phone.value.trim(), email: f.email.value.trim() });
+// letters without a picture (accents, other scripts) are written without their accent, or as "?"
+const plain = s => s.normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^\x20-\x7e]/g, '?');
 
-const CELL = 'padding:0; font-size:0; line-height:0;';
-const img = (src, w, h, alt = '', extra = '') => `<img src="${src}" alt="${esc(alt)}" width="${w}" height="${h}" style="display:block; width:${w}px; height:${h}px; border:0;${extra}">`;
-const link = (href, inner) => `<a href="${esc(href)}" target="_blank" style="color:#16391c; text-decoration:none;">${inner}</a>`;
-const text = (str, size, lineHeight, weight, color) =>
-  `<div style="font-family:${FONT}; font-size:${size}px; line-height:${lineHeight}px; font-weight:${weight}; color:${color}; white-space:nowrap;">${esc(str)}</div>`;
+// Kept as short as possible: Gmail allows 10,000 characters and each letter picture takes ~74.
+const Z = 'font-size:0;line-height:0;white-space:nowrap';  // rows of inline pictures, no gaps
+const T = '<table cellpadding="0" cellspacing="0" border="0">';
+const pic = (name, w, alt = '') => `<img src="${G}${name}.png" width="${w}"${alt ? ` alt="${esc(alt)}"` : ''} style="display:block">`;
+const inl = (name, w) => `<img src="${G}${name}.png" width="${w}">`;
+const a = (href, inner) => `<a href="${esc(href)}" target="_blank" style="text-decoration:none">${inner}</a>`;
+
+// One row of character pictures, filled to the row's width with a stretched filler picture (never a coloured cell).
+function letters(style, str, width, before = [], after = []) {
+  const w = st.metrics.widths[style], height = style === 'n' ? 30 : 20;
+  let used = 0, out = '', cut = false;
+  for (const [name, pw] of before) { out += inl(name, pw); used += pw; }
+  const tail = after.reduce((sum, [, pw]) => sum + pw, 0);
+  for (const ch of plain(str)) {
+    if (used + w[ch] + tail > width) { cut = true; break; }
+    out += inl(style + ch.charCodeAt(0), w[ch]);
+    used += w[ch];
+  }
+  for (const [name, pw] of after) { out += inl(name, pw); used += pw; }
+  if (used < width) out += `<img src="${G}fill-${height}.png" width="${width - used}" height="${height}">`;
+  return { html: out, cut };
+}
 
 // Layout follows Figma node 2738:2 (700×200): left column 297, photo column 106, right column 297.
 function signatureHtml(p) {
-  const contact = (icon, label, href) => `<tr>
-          <td width="22" height="20" valign="top" bgcolor="#ffffff" style="${CELL} background-color:#ffffff;">${img(SHARED + icon, 16, 16)}</td>
-          <td valign="top" bgcolor="#ffffff" style="padding:1px 0 0 0; background-color:#ffffff; font-family:${FONT}; font-size:10px; line-height:14px; color:#16391c; white-space:nowrap;">${link(href, esc(label))}</td>
-        </tr>`;
-  const social = (file, w, href, alt) => `<td style="${CELL}">${link(href, img(DM + file, w, 24, alt))}</td>`;
-  return `<table cellpadding="0" cellspacing="0" border="0" width="700" bgcolor="#ffffff" style="width:700px; border-collapse:collapse; background-color:#ffffff; mso-table-lspace:0; mso-table-rspace:0;">
-<tr>
-  <td width="297" valign="top" style="${CELL}">
-    <table cellpadding="0" cellspacing="0" border="0" width="297" bgcolor="#ffffff" style="border-collapse:collapse; background-color:#ffffff;">
-      <tr><td colspan="3" style="${CELL}">${link('https://arthproject.com', img(DM + 'sig-top-left.png', 297, 104, 'arth — Making Property Click'))}</td></tr>
-      <tr>
-        <td rowspan="2" width="26" valign="top" style="${CELL}">${img(DM + 'sig-left.png', 26, 96)}</td>
-        <td width="236" height="50" valign="top" bgcolor="#ffffff" style="padding:0 0 0 2px; background-color:#ffffff;">${text(p.name, 24, 30, 700, '#16391c')}${text(p.role, 12, 18, 500, '#4a5a4c')}</td>
-        <td width="35" valign="top" style="${CELL}">${img(DM + 'sig-mid-a.png', 35, 50)}</td>
-      </tr>
-      <tr><td colspan="2" width="271" height="46" valign="top" bgcolor="#ffffff" style="padding:6px 7px 0 2px; background-color:#ffffff; font-family:${FONT}; font-size:8px; line-height:11.5px; color:#4a5a4c;">${esc(ADDRESS)}</td></tr>
-    </table>
-  </td>
-  <td width="106" valign="top" style="${CELL}">
-    <table cellpadding="0" cellspacing="0" border="0" width="106" bgcolor="#ffffff" style="border-collapse:collapse; background-color:#ffffff;">
-      <tr><td style="${CELL}">${img(DM + 'photo-top.png', 106, 19)}</td></tr>
-      <tr><td style="${CELL}">${st.photo ? img(st.photo.url, 106, 106, p.name) : img(DM + 'photo-mid.png', 106, 106)}</td></tr>
-      <tr><td style="${CELL}">${img(DM + 'photo-bottom.png', 106, 75)}</td></tr>
-    </table>
-  </td>
-  <td width="297" valign="top" style="${CELL}">
-    <table cellpadding="0" cellspacing="0" border="0" width="297" bgcolor="#ffffff" style="border-collapse:collapse; background-color:#ffffff;">
-      <tr><td colspan="3" style="${CELL}">${img(DM + 'sig-top-right.png', 297, 104)}</td></tr>
-      <tr>
-        <td width="89" valign="top" style="${CELL}">${img(DM + 'sig-mid-d.png', 89, 96)}</td>
-        <td width="164" valign="top" bgcolor="#ffffff" style="padding:2px 0 0 0; background-color:#ffffff;">
-          <table cellpadding="0" cellspacing="0" border="0" width="164" bgcolor="#ffffff" style="width:164px; border-collapse:collapse; background-color:#ffffff;">
-        ${contact('icon-phone.png', p.phone, 'tel:+' + digits(p.phone))}
-        ${contact('icon-email.png', p.email, 'mailto:' + p.email)}
-        ${contact('icon-website.png', 'arthproject.com', 'https://arthproject.com')}
-          </table>
-          <table cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="border-collapse:collapse; background-color:#ffffff;">
-            <tr>
-              ${social('ig.png', 22, 'https://www.instagram.com/the.arth.project/', 'Instagram')}
-              ${social('fb.png', 20, 'https://www.facebook.com/share/1G9WyW885T/', 'Facebook')}
-              ${social('li.png', 21, 'https://www.linkedin.com/company/arthproject/', 'LinkedIn')}
-              ${social('wa.png', 25, 'https://wa.me/' + digits(p.phone), 'WhatsApp')}
-            </tr>
-          </table>
-        </td>
-        <td width="44" valign="top" style="${CELL}">${img(DM + 'sig-right.png', 44, 96)}</td>
-      </tr>
-    </table>
-  </td>
-</tr>
-</table>`;
+  const m = st.metrics;
+  const ownDomain = p.email.toLowerCase().endsWith(DOMAIN), ownPrefix = p.phone.startsWith(PREFIX);
+  const name = letters('n', p.name, 236);
+  const role = letters('r', p.role, 236);
+  const phone = letters('c', ownPrefix ? p.phone.slice(PREFIX.length) : p.phone, 164,
+    [['c-phone-icon', 22], ...(ownPrefix ? [['c-plus', m.plus]] : [])]);
+  const email = letters('c', ownDomain ? p.email.slice(0, -DOMAIN.length) : p.email, 164,
+    [['c-email-icon', 22]], ownDomain ? [['c-at', m.at]] : []);
+  st.cut = [name.cut && 'name', role.cut && 'role', phone.cut && 'phone', email.cut && 'email'].filter(Boolean);
+  const photo = st.photo ? `<img src="${st.photo.url}" width="106" alt="${esc(p.name)}" style="display:block">` : pic('b-blank', 106);
+  const social = [['ig', 22, 'https://www.instagram.com/the.arth.project/'], ['fb', 20, 'https://www.facebook.com/share/1G9WyW885T/'],
+    ['li', 21, 'https://www.linkedin.com/company/arthproject/'], ['wa', 101, 'https://wa.me/' + digits(p.phone)]]
+    .map(([n, w, href]) => a(href, inl('c-social-' + n, w))).join('');
+  return `<table cellpadding="0" cellspacing="0" border="0" width="700"><tr>`
+    + `<td valign="top">${T}<tr><td colspan="3">${a('https://arthproject.com', pic('a-top', 297, 'arth'))}</td></tr>`
+    + `<tr><td rowspan="3" valign="top">${pic('a-left', 26)}</td><td style="${Z}">${name.html}</td><td rowspan="2" valign="top">${pic('a-mid', 35)}</td></tr>`
+    + `<tr><td style="${Z}">${role.html}</td></tr><tr><td colspan="2">${pic('a-addr', 271)}</td></tr></table></td>`
+    + `<td valign="top">${T}<tr><td>${pic('b-top', 106)}</td></tr><tr><td>${photo}</td></tr><tr><td>${pic('b-bottom', 106)}</td></tr></table></td>`
+    + `<td valign="top">${T}<tr><td colspan="3">${pic('c-top', 297)}</td></tr><tr><td valign="top">${pic('c-left', 89)}</td><td valign="top">${T}`
+    + `<tr><td style="${Z}">${a('tel:+' + digits(p.phone), phone.html)}</td></tr>`
+    + `<tr><td style="${Z}">${a('mailto:' + p.email, email.html)}</td></tr>`
+    + `<tr><td>${a('https://arthproject.com', pic('c-web', 164))}</td></tr>`
+    + `<tr><td style="${Z}">${social}</td></tr><tr><td>${pic('c-bottom', 164)}</td></tr></table></td>`
+    + `<td valign="top">${pic('c-right', 44)}</td></tr></table></td></tr></table>`;
 }
 
-function measure(str, font) { const x = document.createElement('canvas').getContext('2d'); x.font = font; return x.measureText(str).width; }
-
 function update() {
-  const p = person();
-  document.getElementById('preview').innerHTML = signatureHtml(p);
+  if (!st.metrics) return;
+  const p = person(), html = signatureHtml(p);
+  document.getElementById('preview').innerHTML = html;
   const w = [];
-  if (measure(p.name, 'bold 24px Arial') > 232) w.push('The name is wider than its space; consider a shorter form.');
-  if (measure(p.role, '12px Arial') > 232) w.push('The role is wider than its space.');
-  if (measure(p.email, '10px Arial') > 140) w.push('The email address is wider than its space.');
+  if (st.cut.length) w.push(`Too long to fit, so it is cut off: ${st.cut.join(', ')}.`);
+  if (plain(Object.values(p).join('')) !== Object.values(p).join('')) w.push('Accents and non-English letters are shown without accents or as "?".');
+  if (html.length > GMAIL_LIMIT) w.push('This signature is longer than Gmail allows; shorten the role or name.');
   document.getElementById('warn').textContent = w.join(' ');
-  checkPictures();
 }
 
 // Checks the email-ready photo is online (GitHub makes it about a minute after an upload).
 function choosePhoto(url) {
   status('Loading the photo…');
   const i = new Image();
-  i.onload = () => { st.photo = { url, file: f.photo.selectedOptions[0].dataset.file }; status(''); update(); };
+  i.onload = () => { st.photo = { url }; status(''); update(); };
   i.onerror = () => status('That photo is still being prepared on GitHub. Wait a minute, reload the page and choose it again.');
   i.src = url;
 }
@@ -184,73 +169,28 @@ f.addEventListener('input', e => { if (e.target.name !== 'photo') update(); });
 f.photo.addEventListener('change', () => { if (f.photo.value) choosePhoto(f.photo.value); else { st.photo = null; update(); } });
 document.getElementById('modes').onchange = e => { document.getElementById('preview').className = 'preview ' + e.target.value; };
 
-// Prepared signatures: people/<slug>-<version>.json drawn as pictures by .github/scripts/render_signatures.py.
-// The Gmail phone apps recolour text in dark mode but never pictures, so when pictures exist for exactly
-// the typed details, Copy uses them. The check runs while typing, so copying itself stays instant.
-const slug = s => s.trim().toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'person';
-const hash = s => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); return (h >>> 0).toString(36); };
-function recordOf(p) {
-  const r = { name: p.name, role: p.role, phone: p.phone, email: p.email, photo: st.photo ? st.photo.file : '', slug: slug(p.name) };
-  return { ...r, version: hash(JSON.stringify(r)) };
-}
-const drawnAt = r => `${SHARED}people/${r.slug}/${r.version}/`;
-
-function imageSignatureHtml(r) {
-  const own = drawnAt(r);
-  const td = (inner, attrs = '') => `<td${attrs} style="${CELL}">${inner}</td>`;
-  const a = (href, inner) => `<a href="${esc(href)}" target="_blank" style="text-decoration:none;">${inner}</a>`;
-  return `<table cellpadding="0" cellspacing="0" border="0" width="700" style="width:700px; border-collapse:collapse; mso-table-lspace:0; mso-table-rspace:0;">
-  <tr>${td(a('https://arthproject.com', img(own + 'top.png', 700, 106, 'arth — Making Property Click')), ' colspan="2"')}</tr>
-  <tr>
-    ${td(img(own + 'left.png', 492, 84, `${r.name} — ${r.role}. ${ADDRESS}`), ' rowspan="4" width="492"')}
-    ${td(a('tel:+' + digits(r.phone), img(own + 'phone-row.png', 208, 20, r.phone)), ' width="208"')}
-  </tr>
-  <tr>${td(a('mailto:' + r.email, img(own + 'email-row.png', 208, 20, r.email)))}</tr>
-  <tr>${td(a('https://arthproject.com', img(SHARED + 'shared/web-row.png', 208, 20, 'arthproject.com')))}</tr>
-  <tr>
-    <td style="${CELL}">
-      <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
-        <tr>
-          ${td(a('https://www.instagram.com/the.arth.project/', img(SHARED + 'shared/ig.png', 22, 24, 'Instagram')))}
-          ${td(a('https://www.facebook.com/share/1G9WyW885T/', img(SHARED + 'shared/fb.png', 20, 24, 'Facebook')))}
-          ${td(a('https://www.linkedin.com/company/arthproject/', img(SHARED + 'shared/li.png', 21, 24, 'LinkedIn')))}
-          ${td(a('https://wa.me/' + digits(r.phone), img(SHARED + 'shared/wa-row.png', 145, 24, 'WhatsApp')))}
-        </tr>
-      </table>
-    </td>
-  </tr>
-  <tr>${td(img(SHARED + 'shared/bottom.png', 700, 10, ' '), ' colspan="2"')}</tr>
-</table>`;
-}
-
-function checkPictures() {
-  const p = person(), note = document.getElementById('phoneMode');
-  st.pictures = null;
-  if (!p.name || !p.role || !p.phone || !p.email || !st.photo) { note.textContent = ''; return; }
-  const r = recordOf(p);
-  const i = new Image();
-  i.onload = () => { if (recordOf(person()).version !== r.version) return; st.pictures = r.version; document.getElementById('preview').innerHTML = imageSignatureHtml(r); note.textContent = '✓ Prepared signature: stays white in dark mode in the Gmail phone app too.'; };
-  i.onerror = () => { if (recordOf(person()).version === r.version) note.textContent = 'Gmail phone app dark mode will darken this card. To keep it white there, these exact details need prepared pictures (ask the admin).'; };
-  i.src = drawnAt(r) + 'email-row.png';
+async function copyHtml(html) {
+  try {
+    await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([html], { type: 'text/plain' }) })]);
+  } catch (e) {
+    // older or stricter browsers: select the rendered preview and use the classic copy command
+    const range = document.createRange(); range.selectNodeContents(document.getElementById('preview'));
+    const sel = getSelection(); sel.removeAllRanges(); sel.addRange(range);
+    const ok = document.execCommand('copy'); sel.removeAllRanges();
+    if (!ok) throw e;
+  }
 }
 
 document.getElementById('copy').onclick = async () => {
   const p = person();
   const missing = [!p.name && 'name', !p.role && 'role', !p.phone && 'phone', !p.email && 'email', !st.photo && 'photo'].filter(Boolean);
   if (missing.length) return status(`Fill in the ${missing.join(', ')} first.`);
-  // prepared pictures for exactly these details stay white in the Gmail phone apps' dark mode
-  const r = recordOf(p);
-  const html = st.pictures === r.version ? imageSignatureHtml(r) : signatureHtml(p);
-  try {
-    await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([html], { type: 'text/plain' }) })]);
-  } catch (e) {
-    // older browsers: copy the rendered preview instead
-    const r = document.createRange(); r.selectNodeContents(document.getElementById('preview'));
-    const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
-    const ok = document.execCommand('copy'); sel.removeAllRanges();
-    if (!ok) return status('The browser blocked copying. Select the preview, copy it with Ctrl+C and paste it into Gmail.');
-  }
-  status(`Signature for ${person().name} copied. Paste it into Gmail → Settings → Signature and save.`);
+  if (!st.metrics) return status('Still loading, try again in a moment.');
+  const html = signatureHtml(p);
+  if (html.length > GMAIL_LIMIT) return status('This signature is longer than Gmail allows; shorten the role or name.');
+  try { await copyHtml(html); }
+  catch (e) { return status('The browser blocked copying. Select the preview, copy it with Ctrl+C and paste it into Gmail.'); }
+  status(`Signature for ${p.name} copied. Paste it into Gmail → Settings → Signature and save.`);
 };
 
 // Photos uploaded to assets/photos/ on GitHub are listed here (the folder listing is public).
@@ -260,11 +200,8 @@ document.getElementById('copy').onclick = async () => {
     const r = await fetch(`https://api.github.com/repos/${REPO}/contents/assets/photos?ref=${BRANCH}`, { cache: 'no-store' });
     if (!r.ok) throw new Error(r.status);
     const photos = (await r.json()).filter(x => x.type === 'file' && /\.(png|jpe?g|webp)$/i.test(x.name));
-    f.photo.innerHTML = photos.map(x => {
-      const url = emailPhoto(x.name, x.sha);
-      return `<option value="${esc(url)}" data-file="${esc(x.name)}">${esc(label(x.name))}</option>`;
-    }).join('');
-    f.photo.insertAdjacentHTML('afterbegin', '<option value="" selected>Choose a photo…</option>');
+    f.photo.innerHTML = '<option value="" selected>Choose a photo…</option>' +
+      photos.map(x => `<option value="${esc(emailPhoto(x.name, x.sha))}">${esc(label(x.name))}</option>`).join('');
     f.photo.value = '';
   } catch (e) {
     f.photo.innerHTML = '<option value="">No photos found</option>';
@@ -273,7 +210,9 @@ document.getElementById('copy').onclick = async () => {
 })();
 
 f.reset(); // browsers refill fields on reload; start empty every time
-document.fonts.load('700 24px Poppins').finally(update);
+fetch(G + 'metrics.json?v=' + Date.now(), { cache: 'no-store' }).then(r => r.json())
+  .then(m => { st.metrics = m; update(); })
+  .catch(() => status('Could not load the signature pictures from GitHub (reload to try again).'));
 </script>
 </body>
 </html>
