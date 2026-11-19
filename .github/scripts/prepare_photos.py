@@ -1,8 +1,9 @@
 """Make email-ready versions of the signature photos.
 
 Gmail ignores background images, so each photo in assets/photos/ is placed on the
-photo-column background (green header above, white card below) and saved as one
-opaque 212x212 PNG in assets/photos/email/, which the signature generator uses.
+photo-column background (green header above, transparent card below so it follows
+light and dark mode) and saved as one 212x212 PNG in assets/photos/email/, which the
+signature generator uses.
 Round cut-outs (transparent corners) are used as they are; any other photo is
 centre-cropped to a circle with a white ring.
 """
@@ -13,7 +14,7 @@ from PIL import Image, ImageDraw, ImageOps
 ROOT = Path(__file__).resolve().parents[2]
 PHOTOS = ROOT / "assets" / "photos"
 OUT = PHOTOS / "email"
-BACKGROUND = ROOT / "assets" / "email" / "shared" / "photo-mid.png"
+BACKGROUND = ROOT / "assets" / "email" / "dm" / "photo-mid.png"
 SIZE, RING, AA = 212, 5, 4  # 2x of the 106px photo, 2.5px ring; AA = mask supersampling
 
 
@@ -33,9 +34,12 @@ def prepare(src):
         left, top = (photo.width - side) // 2, (photo.height - side) // 2
         inner = SIZE - 2 * RING
         square = photo.crop((left, top, left + side, top + side)).resize((inner, inner), Image.LANCZOS)
-        card.paste((255, 255, 255, 255), (0, 0), circle_mask(SIZE))
-        card.paste(square, (RING, RING), circle_mask(inner))
-    card.convert("RGB").save(OUT / (src.stem + ".png"), optimize=True)
+        ring = Image.new("RGBA", (SIZE, SIZE), (255, 255, 255, 255))
+        ring.putalpha(circle_mask(SIZE))
+        card.alpha_composite(ring)
+        square.putalpha(circle_mask(inner))
+        card.alpha_composite(square, (RING, RING))
+    card.save(OUT / (src.stem + ".png"), optimize=True)
 
 
 def main():

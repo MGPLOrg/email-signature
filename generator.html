@@ -27,7 +27,9 @@
   .warn:empty { display: none; }
   h2 { font-size: 15px; margin: 24px 0 8px; }
   .preview { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; padding: 16px; background: #fff; }
-  .preview.dark { background: #1f1f1f; }
+  .preview.dark { background: #202124; }
+  .preview.dark table, .preview.dark td { background-color: #202124 !important; }
+  .preview.dark div, .preview.dark td, .preview.dark a { color: #e8eaed !important; }
   .actions { margin-top: 12px; }
   button { font: inherit; font-weight: bold; padding: 9px 14px; border: 0; border-radius: 8px; background: var(--forest); color: #fff; cursor: pointer; }
   ol { padding-left: 20px; color: var(--slate); }
@@ -42,10 +44,10 @@
   <p class="lead">Fill in the details and choose a photo. <strong>Copy signature</strong> copies exactly what the preview shows, straight away.</p>
 
   <form id="f" autocomplete="off" onsubmit="return false">
-    <label>Full name <input type="text" name="name" value="Shikhar Parekh"></label>
-    <label>Role <input type="text" name="role" value="Co-Founder &amp; Business Head"></label>
-    <label>Phone (as shown) <input type="tel" name="phone" value="+91 94480 30000"></label>
-    <label>Email <input type="email" name="email" value="shikhar@arthproject.com"></label>
+    <label>Full name <input type="text" name="name" value="" placeholder="e.g. Shikhar Parekh"></label>
+    <label>Role <input type="text" name="role" value="" placeholder="e.g. Co-Founder &amp; Business Head"></label>
+    <label>Phone (as shown) <input type="tel" name="phone" value="" placeholder="e.g. +91 94480 30000"></label>
+    <label>Email <input type="email" name="email" value="" placeholder="e.g. name@arthproject.com"></label>
     <label class="full"><span>Photo (from <a href="https://github.com/MGPLOrg/email-signature/tree/main/assets/photos" target="_blank">assets/photos</a> on GitHub)</span>
       <select name="photo"><option value="">Loading photos…</option></select>
     </label>
@@ -53,7 +55,7 @@
     <p class="warn" id="warn"></p>
   </form>
 
-  <h2>Preview <label style="display:inline-flex; gap:6px; font-weight:normal; font-size:13px; margin-left:12px;"><input type="checkbox" id="darkToggle"> dark background</label></h2>
+  <h2>Preview <label style="display:inline-flex; gap:6px; font-weight:normal; font-size:13px; margin-left:12px;"><input type="checkbox" id="darkToggle"> dark mode (as in the Gmail app)</label></h2>
   <div class="preview" id="preview"></div>
   <div class="actions"><button type="button" id="copy">Copy signature</button></div>
   <p class="status" id="status" role="status"></p>
@@ -72,13 +74,15 @@
 // and the copied signature always matches the preview.
 const PAGES = 'https://mgplorg.github.io/email-signature/';
 const SHARED = PAGES + 'assets/email/';
+// Decoration with a transparent card area, so Gmail's dark mode darkens the card evenly (see .github/scripts/make_dark_mode_pieces.py).
+const DM = SHARED + 'dm/';
 const REPO = 'MGPLOrg/email-signature', BRANCH = 'main';
 const ADDRESS = 'Manpho Stambh, 1st Main Rd, opposite Shri Vasupujya Swami Jain Temple, Hebbal, Bengaluru, Karnataka 560032';
 const FONT = 'Poppins, Arial, Helvetica, sans-serif';
 const f = document.getElementById('f');
 // Email-ready photos (photo on its background, made by .github/workflows/prepare-photos.yml), since Gmail ignores background images.
 const emailPhoto = (name, sha = '') => PAGES + 'assets/photos/email/' + encodeURIComponent(name.replace(/\.[^.]+$/, '')) + '.png' + (sha ? '?v=' + sha.slice(0, 7) : '');
-const st = { photo: { url: emailPhoto('shikhar-parekh.png') } };
+const st = { photo: null };
 
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const digits = s => s.replace(/[^0-9]/g, '');
@@ -97,32 +101,32 @@ function signatureHtml(p) {
           <td width="22" height="20" valign="top" bgcolor="#ffffff" style="${CELL} background-color:#ffffff;">${img(SHARED + icon, 16, 16)}</td>
           <td valign="top" bgcolor="#ffffff" style="padding:1px 0 0 0; background-color:#ffffff; font-family:${FONT}; font-size:10px; line-height:14px; color:#16391c; white-space:nowrap;">${link(href, esc(label))}</td>
         </tr>`;
-  const social = (file, w, href, alt) => `<td style="${CELL}">${link(href, img(SHARED + 'shared/' + file, w, 24, alt))}</td>`;
+  const social = (file, w, href, alt) => `<td style="${CELL}">${link(href, img(DM + file, w, 24, alt))}</td>`;
   return `<table cellpadding="0" cellspacing="0" border="0" width="700" bgcolor="#ffffff" style="width:700px; border-collapse:collapse; background-color:#ffffff; mso-table-lspace:0; mso-table-rspace:0;">
 <tr>
   <td width="297" valign="top" style="${CELL}">
-    <table cellpadding="0" cellspacing="0" border="0" width="297" style="border-collapse:collapse;">
-      <tr><td colspan="3" style="${CELL}">${link('https://arthproject.com', img(SHARED + 'sig-top-left.png', 297, 104, 'arth — Making Property Click'))}</td></tr>
+    <table cellpadding="0" cellspacing="0" border="0" width="297" bgcolor="#ffffff" style="border-collapse:collapse; background-color:#ffffff;">
+      <tr><td colspan="3" style="${CELL}">${link('https://arthproject.com', img(DM + 'sig-top-left.png', 297, 104, 'arth — Making Property Click'))}</td></tr>
       <tr>
-        <td rowspan="2" width="26" valign="top" style="${CELL}">${img(SHARED + 'sig-left.png', 26, 96)}</td>
+        <td rowspan="2" width="26" valign="top" style="${CELL}">${img(DM + 'sig-left.png', 26, 96)}</td>
         <td width="236" height="50" valign="top" bgcolor="#ffffff" style="padding:0 0 0 2px; background-color:#ffffff;">${text(p.name, 24, 30, 700, '#16391c')}${text(p.role, 12, 18, 500, '#4a5a4c')}</td>
-        <td width="35" valign="top" style="${CELL}">${img(SHARED + 'sig-mid-a.png', 35, 50)}</td>
+        <td width="35" valign="top" style="${CELL}">${img(DM + 'sig-mid-a.png', 35, 50)}</td>
       </tr>
       <tr><td colspan="2" width="271" height="46" valign="top" bgcolor="#ffffff" style="padding:6px 7px 0 2px; background-color:#ffffff; font-family:${FONT}; font-size:8px; line-height:11.5px; color:#4a5a4c;">${esc(ADDRESS)}</td></tr>
     </table>
   </td>
   <td width="106" valign="top" style="${CELL}">
-    <table cellpadding="0" cellspacing="0" border="0" width="106" style="border-collapse:collapse;">
-      <tr><td style="${CELL}">${img(SHARED + 'shared/photo-top.png', 106, 19)}</td></tr>
-      <tr><td style="${CELL}">${img(st.photo.url, 106, 106, p.name)}</td></tr>
-      <tr><td style="${CELL}">${img(SHARED + 'shared/photo-bottom.png', 106, 75)}</td></tr>
+    <table cellpadding="0" cellspacing="0" border="0" width="106" bgcolor="#ffffff" style="border-collapse:collapse; background-color:#ffffff;">
+      <tr><td style="${CELL}">${img(DM + 'photo-top.png', 106, 19)}</td></tr>
+      <tr><td style="${CELL}">${st.photo ? img(st.photo.url, 106, 106, p.name) : img(DM + 'photo-mid.png', 106, 106)}</td></tr>
+      <tr><td style="${CELL}">${img(DM + 'photo-bottom.png', 106, 75)}</td></tr>
     </table>
   </td>
   <td width="297" valign="top" style="${CELL}">
-    <table cellpadding="0" cellspacing="0" border="0" width="297" style="border-collapse:collapse;">
-      <tr><td colspan="3" style="${CELL}">${img(SHARED + 'sig-top-right.png', 297, 104)}</td></tr>
+    <table cellpadding="0" cellspacing="0" border="0" width="297" bgcolor="#ffffff" style="border-collapse:collapse; background-color:#ffffff;">
+      <tr><td colspan="3" style="${CELL}">${img(DM + 'sig-top-right.png', 297, 104)}</td></tr>
       <tr>
-        <td width="89" valign="top" style="${CELL}">${img(SHARED + 'sig-mid-d.png', 89, 96)}</td>
+        <td width="89" valign="top" style="${CELL}">${img(DM + 'sig-mid-d.png', 89, 96)}</td>
         <td width="164" valign="top" bgcolor="#ffffff" style="padding:2px 0 0 0; background-color:#ffffff;">
           <table cellpadding="0" cellspacing="0" border="0" width="164" bgcolor="#ffffff" style="width:164px; border-collapse:collapse; background-color:#ffffff;">
         ${contact('icon-phone.png', p.phone, 'tel:+' + digits(p.phone))}
@@ -138,7 +142,7 @@ function signatureHtml(p) {
             </tr>
           </table>
         </td>
-        <td width="44" valign="top" style="${CELL}">${img(SHARED + 'sig-right.png', 44, 96)}</td>
+        <td width="44" valign="top" style="${CELL}">${img(DM + 'sig-right.png', 44, 96)}</td>
       </tr>
     </table>
   </td>
@@ -168,11 +172,14 @@ function choosePhoto(url) {
 }
 
 f.addEventListener('input', e => { if (e.target.name !== 'photo') update(); });
-f.photo.addEventListener('change', () => { if (f.photo.value) choosePhoto(f.photo.value); });
+f.photo.addEventListener('change', () => { if (f.photo.value) choosePhoto(f.photo.value); else { st.photo = null; update(); } });
 document.getElementById('darkToggle').onchange = e => document.getElementById('preview').classList.toggle('dark', e.target.checked);
 
 document.getElementById('copy').onclick = async () => {
-  const html = signatureHtml(person());
+  const p = person();
+  const missing = [!p.name && 'name', !p.role && 'role', !p.phone && 'phone', !p.email && 'email', !st.photo && 'photo'].filter(Boolean);
+  if (missing.length) return status(`Fill in the ${missing.join(', ')} first.`);
+  const html = signatureHtml(p);
   try {
     await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([html], { type: 'text/plain' }) })]);
   } catch (e) {
@@ -194,15 +201,17 @@ document.getElementById('copy').onclick = async () => {
     const photos = (await r.json()).filter(x => x.type === 'file' && /\.(png|jpe?g|webp)$/i.test(x.name));
     f.photo.innerHTML = photos.map(x => {
       const url = emailPhoto(x.name, x.sha);
-      return `<option value="${esc(url)}"${url.split('?')[0] === st.photo.url.split('?')[0] ? ' selected' : ''}>${esc(label(x.name))}</option>`;
+      return `<option value="${esc(url)}">${esc(label(x.name))}</option>`;
     }).join('');
-    if (f.photo.value) { st.photo = { url: f.photo.value }; update(); }
+    f.photo.insertAdjacentHTML('afterbegin', '<option value="" selected>Choose a photo…</option>');
+    f.photo.value = '';
   } catch (e) {
-    f.photo.innerHTML = `<option value="${esc(st.photo.url)}">Shikhar Parekh</option>`;
+    f.photo.innerHTML = '<option value="">No photos found</option>';
     status('Could not list the photos on GitHub (reload to try again).');
   }
 })();
 
+f.reset(); // browsers refill fields on reload; start empty every time
 document.fonts.load('700 24px Poppins').finally(update);
 </script>
 </body>
