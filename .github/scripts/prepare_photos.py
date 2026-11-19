@@ -7,6 +7,8 @@ Opaque on purpose: the Gmail phone apps never recolour pictures, so the card sta
 Round cut-outs (transparent corners) are used as they are; any other photo is
 centre-cropped to a circle with a white ring.
 """
+import hashlib
+import json
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageOps
@@ -48,6 +50,11 @@ def main():
     for src in sources:
         prepare(src)
         print("prepared", src.name)
+    # the generator's photo list (served by GitHub Pages, which has no request limit unlike the GitHub API);
+    # "v" changes whenever a photo changes, so Gmail fetches the new picture instead of a cached one
+    listing = [{"name": p.name, "file": p.stem + ".png",
+                "v": hashlib.sha1((OUT / (p.stem + ".png")).read_bytes()).hexdigest()[:7]} for p in sources]
+    (OUT / "list.json").write_text(json.dumps(listing, indent=1) + "\n", encoding="utf-8")
     # drop email versions whose photo was deleted
     names = {p.stem for p in sources}
     for old in OUT.glob("*.png"):

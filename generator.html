@@ -78,7 +78,6 @@
 // They are made by .github/scripts/make_letter_pieces.py; nothing is uploaded per person.
 const PAGES = 'https://mgplorg.github.io/email-signature/';
 const G = PAGES + 'g/';  // short address: the signature is made of ~60 letter pictures and Gmail limits its length
-const REPO = 'MGPLOrg/email-signature', BRANCH = 'main';
 const ADDRESS = 'Manpho Stambh, 1st Main Rd, opposite Shri Vasupujya Swami Jain Temple, Hebbal, Bengaluru, Karnataka 560032';
 const DOMAIN = '@arthproject.com', PREFIX = '+91 ';
 const GMAIL_LIMIT = 9500;  // Gmail refuses signatures over 10,000 characters; keep a margin
@@ -193,15 +192,16 @@ document.getElementById('copy').onclick = async () => {
   status(`Signature for ${p.name} copied. Paste it into Gmail → Settings → Signature and save.`);
 };
 
-// Photos uploaded to assets/photos/ on GitHub are listed here (the folder listing is public).
+// Photos uploaded to assets/photos/ on GitHub are listed here.
 (async () => {
   const label = n => n.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   try {
-    const r = await fetch(`https://api.github.com/repos/${REPO}/contents/assets/photos?ref=${BRANCH}`, { cache: 'no-store' });
+    // list.json is written by .github/scripts/prepare_photos.py whenever photos change
+    const r = await fetch(`${PAGES}assets/photos/email/list.json?x=${Date.now()}`, { cache: 'no-store' });
     if (!r.ok) throw new Error(r.status);
-    const photos = (await r.json()).filter(x => x.type === 'file' && /\.(png|jpe?g|webp)$/i.test(x.name));
+    const photos = await r.json();
     f.photo.innerHTML = '<option value="" selected>Choose a photo…</option>' +
-      photos.map(x => `<option value="${esc(emailPhoto(x.name, x.sha))}">${esc(label(x.name))}</option>`).join('');
+      photos.map(x => `<option value="${esc(emailPhoto(x.name, x.v))}">${esc(label(x.name))}</option>`).join('');
     f.photo.value = '';
   } catch (e) {
     f.photo.innerHTML = '<option value="">No photos found</option>';
