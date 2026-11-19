@@ -27,7 +27,10 @@
   .warn:empty { display: none; }
   h2 { font-size: 15px; margin: 24px 0 8px; }
   .preview { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; padding: 16px; background: #fff; }
-  .preview.dark { background: #202124; }
+  /* Gmail on a computer shows the email as it is on a dark page; the Gmail phone apps also darken backgrounds and lighten text */
+  .preview.web-dark, .preview.app-dark { background: #202124; }
+  .preview.app-dark table, .preview.app-dark td { background-color: #202124 !important; }
+  .preview.app-dark div, .preview.app-dark td, .preview.app-dark a { color: #e8eaed !important; }
   .modes { display: inline-flex; gap: 12px; margin-left: 12px; font-weight: normal; font-size: 13px; }
   .modes label { display: inline-flex; gap: 4px; align-items: center; font-weight: normal; }
   .actions { margin-top: 12px; }
@@ -41,7 +44,7 @@
 <body>
 <main>
   <h1>Arth email signature generator</h1>
-  <p class="lead">Fill in the details and choose a photo. The signature is made of pictures, so it stays white in dark mode too, in Gmail on computer and phone.</p>
+  <p class="lead">Fill in the details and choose a photo. <strong>Copy signature</strong> copies exactly what the preview shows, straight away.</p>
 
   <form id="f" autocomplete="off" onsubmit="return false">
     <label>Full name <input type="text" name="name" value="" placeholder="e.g. Shikhar Parekh"></label>
@@ -57,7 +60,8 @@
 
   <h2>Preview <span class="modes" id="modes">
     <label><input type="radio" name="mode" value="" checked> Light</label>
-    <label><input type="radio" name="mode" value="dark"> Dark mode (Gmail on computer and phone)</label>
+    <label><input type="radio" name="mode" value="web-dark"> Dark mode, Gmail on computer</label>
+    <label><input type="radio" name="mode" value="app-dark"> Dark mode, Gmail phone app</label>
   </span></h2>
   <div class="preview" id="preview"></div>
   <div class="actions"><button type="button" id="copy">Copy signature</button></div>
@@ -66,7 +70,7 @@
   <h2>Steps</h2>
   <ol>
     <li>Type the details and choose the photo.</li>
-    <li>Click <strong>Copy signature</strong>. The first time for new details, GitHub opens with them filled in: click <strong>Commit changes</strong> there (and again in the box that appears). GitHub draws the signature in about two minutes; this page tells you when, then click <strong>Copy signature</strong> again.</li>
+    <li>Click <strong>Copy signature</strong>.</li>
     <li>In Gmail open Settings → See all settings → Signature, paste it in place of the old one and click <strong>Save changes</strong> at the bottom.</li>
   </ol>
 </main>
@@ -169,7 +173,7 @@ function update() {
 function choosePhoto(url) {
   status('Loading the photo…');
   const i = new Image();
-  i.onload = () => { st.photo = { url, file: f.photo.selectedOptions[0].dataset.file }; status(''); update(); };
+  i.onload = () => { st.photo = { url }; status(''); update(); };
   i.onerror = () => status('That photo is still being prepared on GitHub. Wait a minute, reload the page and choose it again.');
   i.src = url;
 }
@@ -177,116 +181,22 @@ function choosePhoto(url) {
 f.addEventListener('input', e => { if (e.target.name !== 'photo') update(); });
 f.photo.addEventListener('change', () => { if (f.photo.value) choosePhoto(f.photo.value); else { st.photo = null; update(); } });
 document.getElementById('modes').onchange = e => { document.getElementById('preview').className = 'preview ' + e.target.value; };
-// any change means a different signature: drop a pending 'ready' state
-f.addEventListener('input', () => { copyBtn.textContent = 'Copy signature'; st.waiting = st.ready = null; });
 
-// The copied signature is made of pictures drawn by GitHub (.github/scripts/render_signatures.py) from
-// people/<slug>-<version>.json, because the Gmail phone apps recolour text in dark mode but never pictures.
-const slug = s => s.trim().toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'person';
-const hash = s => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); return (h >>> 0).toString(36); };
-const record = p => {
-  const r = { name: p.name, role: p.role, phone: p.phone, email: p.email, photo: st.photo.file, slug: slug(p.name) };
-  return { ...r, version: hash(JSON.stringify(r)) };
-};
-const drawnAt = r => `${SHARED}people/${r.slug}/${r.version}/`;
-
-function imageSignatureHtml(r) {
-  const own = drawnAt(r);
-  const pic = (src, w, h, alt = '') => img(src, w, h, alt);
-  const td = (inner, attrs = '') => `<td${attrs} style="${CELL}">${inner}</td>`;
-  const a = (href, inner) => `<a href="${esc(href)}" target="_blank" style="text-decoration:none;">${inner}</a>`;
-  return `<table cellpadding="0" cellspacing="0" border="0" width="700" style="width:700px; border-collapse:collapse; mso-table-lspace:0; mso-table-rspace:0;">
-  <tr>${td(a('https://arthproject.com', pic(own + 'top.png', 700, 106, 'arth — Making Property Click')), ' colspan="2"')}</tr>
-  <tr>
-    ${td(pic(own + 'left.png', 492, 84, `${r.name} — ${r.role}. ${ADDRESS}`), ' rowspan="4" width="492"')}
-    ${td(a('tel:+' + digits(r.phone), pic(own + 'phone-row.png', 208, 20, r.phone)), ' width="208"')}
-  </tr>
-  <tr>${td(a('mailto:' + r.email, pic(own + 'email-row.png', 208, 20, r.email)))}</tr>
-  <tr>${td(a('https://arthproject.com', pic(SHARED + 'shared/web-row.png', 208, 20, 'arthproject.com')))}</tr>
-  <tr>
-    <td style="${CELL}">
-      <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
-        <tr>
-          ${td(a('https://www.instagram.com/the.arth.project/', pic(SHARED + 'shared/ig.png', 22, 24, 'Instagram')))}
-          ${td(a('https://www.facebook.com/share/1G9WyW885T/', pic(SHARED + 'shared/fb.png', 20, 24, 'Facebook')))}
-          ${td(a('https://www.linkedin.com/company/arthproject/', pic(SHARED + 'shared/li.png', 21, 24, 'LinkedIn')))}
-          ${td(a('https://wa.me/' + digits(r.phone), pic(SHARED + 'shared/wa-row.png', 145, 24, 'WhatsApp')))}
-        </tr>
-      </table>
-    </td>
-  </tr>
-  <tr>${td(pic(SHARED + 'shared/bottom.png', 700, 10, ' '), ' colspan="2"')}</tr>
-</table>`;
-}
-
-const online = url => new Promise(ok => { const i = new Image(); i.onload = () => ok(true); i.onerror = () => ok(false); i.src = url + '?check=' + Date.now(); });
-const drawn = r => Promise.all(['top', 'left', 'phone-row', 'email-row'].map(n => online(drawnAt(r) + n + '.png'))).then(all => all.every(Boolean));
-const copyBtn = document.getElementById('copy');
-
-async function copyHtml(html) {
-  try {
-    await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([html], { type: 'text/plain' }) })]);
-  } catch (e) {
-    // older or stricter browsers: select a rendered copy and use the classic copy command
-    const box = document.createElement('div');
-    box.style.cssText = 'position:fixed; left:-10000px; top:0;';
-    box.innerHTML = html; document.body.append(box);
-    const range = document.createRange(); range.selectNodeContents(box);
-    const sel = getSelection(); sel.removeAllRanges(); sel.addRange(range);
-    const ok = document.execCommand('copy');
-    sel.removeAllRanges(); box.remove();
-    if (!ok) throw e;
-  }
-}
-
-// Wait for GitHub to draw the pictures, then ask for one more click (browsers only copy right after a click).
-async function waitForDrawing(r) {
-  for (let i = 0; i < 40; i++) {
-    if (st.waiting !== r.version) return;
-    if (await drawn(r)) {
-      st.waiting = null; st.ready = r.version;
-      copyBtn.textContent = 'Copy signature (ready)';
-      return status(`GitHub has drawn ${r.name}'s signature. Click "Copy signature (ready)" to copy it.`);
-    }
-    status(`Waiting for GitHub to draw ${r.name}'s signature… (${i * 10}s, usually about two minutes). Make sure you clicked Commit changes in the GitHub tab.`);
-    await new Promise(ok => setTimeout(ok, 10000));
-  }
-  status('GitHub is taking longer than usual. Wait a minute, then click Copy signature again.');
-}
-
-copyBtn.onclick = async () => {
+document.getElementById('copy').onclick = async () => {
   const p = person();
   const missing = [!p.name && 'name', !p.role && 'role', !p.phone && 'phone', !p.email && 'email', !st.photo && 'photo'].filter(Boolean);
   if (missing.length) return status(`Fill in the ${missing.join(', ')} first.`);
-  const r = record(p);
-  copyBtn.textContent = 'Copy signature';
-  if (st.ready === r.version) {  // already checked: copy straight away, while the click still counts
-    try { await copyHtml(imageSignatureHtml(r)); return status(`Signature for ${r.name} copied. Paste it into Gmail → Settings → Signature and save.`); }
-    catch (e) { return status('The browser blocked copying. Click Copy signature again.'); }
-  }
-  status('Checking GitHub…');
-  // the click's permission to copy is kept while the check runs by handing the clipboard a promise
-  const ready = drawn(r);
-  const blob = type => ready.then(ok => { if (!ok) throw new Error('not drawn'); return new Blob([imageSignatureHtml(r)], { type }); });
+  const html = signatureHtml(p);
   try {
-    await navigator.clipboard.write([new ClipboardItem({ 'text/html': blob('text/html'), 'text/plain': blob('text/plain') })]);
-    return status(`Signature for ${r.name} copied. Paste it into Gmail → Settings → Signature and save.`);
+    await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([html], { type: 'text/plain' }) })]);
   } catch (e) {
-    if (await ready) { st.ready = r.version; copyBtn.textContent = 'Copy signature (ready)'; return status(`${r.name}'s signature is ready. Click "Copy signature (ready)" to copy it.`); }
+    // older browsers: copy the rendered preview instead
+    const r = document.createRange(); r.selectNodeContents(document.getElementById('preview'));
+    const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+    const ok = document.execCommand('copy'); sel.removeAllRanges();
+    if (!ok) return status('The browser blocked copying. Select the preview, copy it with Ctrl+C and paste it into Gmail.');
   }
-  if (st.waiting === r.version) return waitForDrawing(r);
-  // new details: save them to GitHub (signed-in GitHub account, no token), which draws the pictures
-  const file = `${r.slug}-${r.version}.json`;
-  const exists = await fetch(`https://raw.githubusercontent.com/${REPO}/${BRANCH}/people/${file}?x=${Date.now()}`, { cache: 'no-store' }).then(x => x.ok, () => false);
-  st.waiting = r.version;
-  if (!exists) {
-    const url = `https://github.com/${REPO}/new/${BRANCH}/people?filename=${encodeURIComponent(file)}&value=${encodeURIComponent(JSON.stringify(r, null, 2) + '\n')}`;
-    if (!window.open(url, '_blank')) {  // pop-up blocked: offer the link instead
-      document.getElementById('status').innerHTML = `New details: <a href="${esc(url)}" target="_blank">open GitHub to save them</a>, click <strong>Commit changes</strong> there, and this page will tell you when the signature is ready.`;
-      return setTimeout(() => waitForDrawing(r), 15000);
-    }
-  }
-  waitForDrawing(r);
+  status(`Signature for ${person().name} copied. Paste it into Gmail → Settings → Signature and save.`);
 };
 
 // Photos uploaded to assets/photos/ on GitHub are listed here (the folder listing is public).
@@ -298,7 +208,7 @@ copyBtn.onclick = async () => {
     const photos = (await r.json()).filter(x => x.type === 'file' && /\.(png|jpe?g|webp)$/i.test(x.name));
     f.photo.innerHTML = photos.map(x => {
       const url = emailPhoto(x.name, x.sha);
-      return `<option value="${esc(url)}" data-file="${esc(x.name)}">${esc(label(x.name))}</option>`;
+      return `<option value="${esc(url)}">${esc(label(x.name))}</option>`;
     }).join('');
     f.photo.insertAdjacentHTML('afterbegin', '<option value="" selected>Choose a photo…</option>');
     f.photo.value = '';
