@@ -178,7 +178,7 @@ f.addEventListener('input', e => { if (e.target.name !== 'photo') update(); });
 f.photo.addEventListener('change', () => { if (f.photo.value) choosePhoto(f.photo.value); else { st.photo = null; update(); } });
 document.getElementById('modes').onchange = e => { document.getElementById('preview').className = 'preview ' + e.target.value; };
 // any change means a different signature: drop a pending 'ready' state
-f.addEventListener('input', () => { copyBtn.textContent = 'Copy signature'; st.waiting = null; });
+f.addEventListener('input', () => { copyBtn.textContent = 'Copy signature'; st.waiting = st.ready = null; });
 
 // The copied signature is made of pictures drawn by GitHub (.github/scripts/render_signatures.py) from
 // people/<slug>-<version>.json, because the Gmail phone apps recolour text in dark mode but never pictures.
@@ -232,7 +232,7 @@ async function waitForDrawing(r) {
   for (let i = 0; i < 40; i++) {
     if (st.waiting !== r.version) return;
     if (await drawn(r)) {
-      st.waiting = null;
+      st.waiting = null; st.ready = r.version;
       copyBtn.textContent = 'Copy signature (ready)';
       return status(`GitHub has drawn ${r.name}'s signature. Click "Copy signature (ready)" to copy it.`);
     }
@@ -248,6 +248,10 @@ copyBtn.onclick = async () => {
   if (missing.length) return status(`Fill in the ${missing.join(', ')} first.`);
   const r = record(p);
   copyBtn.textContent = 'Copy signature';
+  if (st.ready === r.version) {  // already checked: copy straight away, while the click still counts
+    try { await copyHtml(imageSignatureHtml(r)); return status(`Signature for ${r.name} copied. Paste it into Gmail → Settings → Signature and save.`); }
+    catch (e) { return status('The browser blocked copying. Click Copy signature again.'); }
+  }
   status('Checking GitHub…');
   // the click's permission to copy is kept while the check runs by handing the clipboard a promise
   const ready = drawn(r);
@@ -256,14 +260,20 @@ copyBtn.onclick = async () => {
     await navigator.clipboard.write([new ClipboardItem({ 'text/html': blob('text/html'), 'text/plain': blob('text/plain') })]);
     return status(`Signature for ${r.name} copied. Paste it into Gmail → Settings → Signature and save.`);
   } catch (e) {
-    if (await ready) return status('The browser blocked copying. Click Copy signature again.');
+    if (await ready) { st.ready = r.version; copyBtn.textContent = 'Copy signature (ready)'; return status(`${r.name}'s signature is ready. Click "Copy signature (ready)" to copy it.`); }
   }
   if (st.waiting === r.version) return waitForDrawing(r);
   // new details: save them to GitHub (signed-in GitHub account, no token), which draws the pictures
   const file = `${r.slug}-${r.version}.json`;
   const exists = await fetch(`https://raw.githubusercontent.com/${REPO}/${BRANCH}/people/${file}?x=${Date.now()}`, { cache: 'no-store' }).then(x => x.ok, () => false);
-  if (!exists) window.open(`https://github.com/${REPO}/new/${BRANCH}/people?filename=${encodeURIComponent(file)}&value=${encodeURIComponent(JSON.stringify(r, null, 2) + '\n')}`, '_blank');
   st.waiting = r.version;
+  if (!exists) {
+    const url = `https://github.com/${REPO}/new/${BRANCH}/people?filename=${encodeURIComponent(file)}&value=${encodeURIComponent(JSON.stringify(r, null, 2) + '\n')}`;
+    if (!window.open(url, '_blank')) {  // pop-up blocked: offer the link instead
+      document.getElementById('status').innerHTML = `New details: <a href="${esc(url)}" target="_blank">open GitHub to save them</a>, click <strong>Commit changes</strong> there, and this page will tell you when the signature is ready.`;
+      return setTimeout(() => waitForDrawing(r), 15000);
+    }
+  }
   waitForDrawing(r);
 };
 
