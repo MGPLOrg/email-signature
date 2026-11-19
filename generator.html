@@ -120,7 +120,7 @@ function letters(style, str, width, before = [], after = []) {
 function signatureHtml(p) {
   const m = st.metrics;
   const ownDomain = p.email.toLowerCase().endsWith(DOMAIN), ownPrefix = p.phone.startsWith(PREFIX);
-  const name = letters('h', p.name, 236);  // name row 33px: room for the tails of g, j, p, q, y
+  const name = letters('m', p.name, 236);  // name row 35px: room for the tails of g, j, p, q, y
   const role = letters('s', p.role, 236);
   const phone = letters('c', ownPrefix ? p.phone.slice(PREFIX.length) : p.phone, 164,
     [['c-phone-icon', 22], ...(ownPrefix ? [['c-plus', m.plus]] : [])]);
@@ -133,8 +133,8 @@ function signatureHtml(p) {
     .map(([n, w, href]) => a(href, inl('c-social-' + n, w))).join('');
   return `<table cellpadding="0" cellspacing="0" border="0" width="700"><tr>`
     + `<td valign="top">${T}<tr><td colspan="3">${a('https://arthproject.com', pic('a-top', 297, 'arth'))}</td></tr>`
-    + `<tr><td rowspan="3" valign="top">${pic('a-left', 26)}</td><td style="${Z}">${name.html}</td><td rowspan="2" valign="top">${pic('a-mid', 35)}</td></tr>`
-    + `<tr><td style="${Z}">${role.html}</td></tr><tr><td colspan="2">${pic('a-addr', 271)}</td></tr></table></td>`
+    + `<tr><td rowspan="3" valign="top">${pic('a-left', 26)}</td><td style="${Z}">${name.html}</td><td rowspan="2" valign="top">${pic('a-mid-52', 35)}</td></tr>`
+    + `<tr><td style="${Z}">${role.html}</td></tr><tr><td colspan="2">${pic('a-addr-44', 271)}</td></tr></table></td>`
     + `<td valign="top">${T}<tr><td>${pic('b-top', 106)}</td></tr><tr><td>${photo}</td></tr><tr><td>${pic('b-bottom', 106)}</td></tr></table></td>`
     + `<td valign="top">${T}<tr><td colspan="3">${pic('c-top', 297)}</td></tr><tr><td valign="top">${pic('c-left', 89)}</td><td valign="top">${T}`
     + `<tr><td style="${Z}">${a('tel:+' + digits(p.phone), phone.html)}</td></tr>`

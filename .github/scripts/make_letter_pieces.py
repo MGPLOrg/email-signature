@@ -8,11 +8,12 @@ stays white in every dark mode. All pictures are opaque, drawn at 2x, and none i
 (fully blank pictures showed up black in Gmail before), so fillers carry an invisible mark.
 
 Output (all in g/):
-  fixed pieces   a-top, a-left, a-mid, a-addr, b-top, b-blank (photo area), b-bottom, c-top, c-left, c-right,
+  fixed pieces   a-top, a-left, a-mid-52, a-addr-44, b-top, b-blank (photo area), b-bottom, c-top, c-left, c-right,
                  c-phone-icon, c-email-icon, c-at, c-plus, c-web, c-social-*, c-bottom
-  characters     <style><code>.png, style h = name, s = role, c = contacts; code = char code
-                 (n and r are the first name/role rows, 30 and 20px, where tails of g, j, p, q, y were
-                 cut off; no longer drawn, but kept so signatures pasted before stay intact)
+  characters     <style><code>.png, style m = name, s = role, c = contacts; code = char code
+                 Earlier layouts are no longer drawn but their pictures stay, so signatures pasted
+                 before stay intact: n/r (name row 30px, tails of g, j, p, q, y cut off), h (name row
+                 33px), a-mid and a-addr. Never redraw existing names with a new size: add new names.
   fillers        fill-<height>.png (stretched to fill the rest of a text row)
   metrics.json   width of every character picture and the layout the generator needs
 """
@@ -33,8 +34,8 @@ CHARS = [chr(c) for c in range(32, 127)]
 # style: font weight, size, colour, row height, baseline from the row's top (browser placement:
 # Poppins ascent 1.05em, line gap 0.1em, so with line-height normal the baseline is 1.1em below the top)
 STYLES = {
-    "h": ("Bold", 24, FOREST, 33, 1.1 * 24),        # name: top 104, row 104-137 (letter tails reach 32.9px)
-    "s": ("Medium", 12, SLATE, 17, -1 + 1.1 * 12),   # role: top 136, row 137-154 (the text itself does not move)
+    "m": ("Bold", 24, FOREST, 35, 1.1 * 24),        # name: top 104, row 104-139 (letter tails reach 32.9px, 2px to spare)
+    "s": ("Medium", 12, SLATE, 17, -1 + 1.1 * 12),   # role: top 138, row 139-156
     "c": ("Regular", 10, FOREST, 20, 1 + 1.1 * 10),  # phone/email: top = row top + 1, rows 106-126 and 126-146
 }
 
@@ -107,7 +108,7 @@ def main():
     at = Image.new("RGB", (at_w * S, 20 * S), WHITE)
     text(ImageDraw.Draw(at), "@arthproject.com", "Regular", 10, FOREST, 0, 1)
     pieces = {
-        "a-top": (0, 0, 297, 104), "a-left": (0, 104, 26, 96), "a-mid": (262, 104, 35, 50), "a-addr": (26, 154, 271, 46),
+        "a-top": (0, 0, 297, 104), "a-left": (0, 104, 26, 96), "a-mid-52": (262, 104, 35, 52), "a-addr-44": (26, 156, 271, 44),
         "b-top": (297, 0, 106, 19), "b-blank": (297, 19, 106, 106), "b-bottom": (297, 125, 106, 75),
         "c-top": (403, 0, 297, 106), "c-left": (403, 106, 89, 94), "c-right": (656, 106, 44, 94),
         "c-phone-icon": (492, 106, 22, 20), "c-email-icon": (492, 126, 22, 20), "c-web": (492, 146, 164, 20),
