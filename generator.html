@@ -3,6 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<script>
+  // GitHub Pages lets browsers cache this page for 10 minutes; reloading with a unique ?v= always gets the newest version.
+  if (!/[?&]v=/.test(location.search)) location.replace(location.pathname + '?v=' + Date.now() + location.hash);
+</script>
 <title>Arth Signature Generator</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -45,7 +49,7 @@
     <label class="full"><span>Photo (from <a href="https://github.com/MGPLOrg/email-signature/tree/main/assets/photos" target="_blank">assets/photos</a> on GitHub)</span>
       <select name="photo"><option value="">Loading photos…</option></select>
     </label>
-    <p class="full note">To add a photo, upload it on GitHub to assets/photos (Add file → Upload files), wait a minute and reload this page. Use a square photo, or a round cut-out exported from Figma (106×106 or 212×212).</p>
+    <p class="full note">To add a photo, upload it on GitHub to assets/photos (Add file → Upload files), wait a minute and reload this page. Use a square photo cropped close to the face, or a round cut-out exported from Figma; GitHub turns it into the round signature photo automatically.</p>
     <p class="warn" id="warn"></p>
   </form>
 
@@ -72,7 +76,9 @@ const REPO = 'MGPLOrg/email-signature', BRANCH = 'main';
 const ADDRESS = 'Manpho Stambh, 1st Main Rd, opposite Shri Vasupujya Swami Jain Temple, Hebbal, Bengaluru, Karnataka 560032';
 const FONT = 'Poppins, Arial, Helvetica, sans-serif';
 const f = document.getElementById('f');
-const st = { photo: { url: PAGES + 'assets/photos/shikhar-parekh.png', cutout: true } };
+// Email-ready photos (photo on its background, made by .github/workflows/prepare-photos.yml), since Gmail ignores background images.
+const emailPhoto = (name, sha = '') => PAGES + 'assets/photos/email/' + encodeURIComponent(name.replace(/\.[^.]+$/, '')) + '.png' + (sha ? '?v=' + sha.slice(0, 7) : '');
+const st = { photo: { url: emailPhoto('shikhar-parekh.png') } };
 
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const digits = s => s.replace(/[^0-9]/g, '');
@@ -87,9 +93,6 @@ const text = (str, size, lineHeight, weight, color) =>
 
 // Layout follows Figma node 2738:2 (700×200): left column 297, photo column 106, right column 297.
 function signatureHtml(p) {
-  const photo = st.photo.cutout
-    ? img(st.photo.url, 106, 106, p.name)
-    : img(st.photo.url, 102, 102, p.name, ' border:2px solid #ffffff; border-radius:53px;');
   const contact = (icon, label, href) => `<tr>
           <td width="22" height="20" valign="top" bgcolor="#ffffff" style="${CELL} background-color:#ffffff;">${img(SHARED + icon, 16, 16)}</td>
           <td valign="top" bgcolor="#ffffff" style="padding:1px 0 0 0; background-color:#ffffff; font-family:${FONT}; font-size:10px; line-height:14px; color:#16391c; white-space:nowrap;">${link(href, esc(label))}</td>
@@ -111,7 +114,7 @@ function signatureHtml(p) {
   <td width="106" valign="top" style="${CELL}">
     <table cellpadding="0" cellspacing="0" border="0" width="106" style="border-collapse:collapse;">
       <tr><td style="${CELL}">${img(SHARED + 'shared/photo-top.png', 106, 19)}</td></tr>
-      <tr><td width="106" height="106" background="${SHARED}shared/photo-mid.png" bgcolor="#d2e2a9" style="${CELL} background-image:url('${SHARED}shared/photo-mid.png'); background-repeat:no-repeat; background-size:106px 106px;">${photo}</td></tr>
+      <tr><td style="${CELL}">${img(st.photo.url, 106, 106, p.name)}</td></tr>
       <tr><td style="${CELL}">${img(SHARED + 'shared/photo-bottom.png', 106, 75)}</td></tr>
     </table>
   </td>
@@ -152,24 +155,16 @@ function update() {
   if (measure(p.name, 'bold 24px Arial') > 232) w.push('The name is wider than its space; consider a shorter form.');
   if (measure(p.role, '12px Arial') > 232) w.push('The role is wider than its space.');
   if (measure(p.email, '10px Arial') > 140) w.push('The email address is wider than its space.');
-  if (st.photo.warning) w.push(st.photo.warning);
   document.getElementById('warn').textContent = w.join(' ');
 }
 
-// Loads a photo from GitHub Pages to check it is online and whether it is a round cut-out (transparent corner).
+// Checks the email-ready photo is online (GitHub makes it about a minute after an upload).
 function choosePhoto(url) {
   status('Loading the photo…');
-  const i = new Image(); i.crossOrigin = 'anonymous';
-  i.onload = () => {
-    const c = document.createElement('canvas'); c.width = i.naturalWidth; c.height = i.naturalHeight;
-    const x = c.getContext('2d'); x.drawImage(i, 0, 0);
-    const cutout = x.getImageData(1, 1, 1, 1).data[3] === 0;
-    const square = Math.abs(i.naturalWidth - i.naturalHeight) <= 2;
-    st.photo = { url, cutout, warning: square ? '' : 'This photo is not square, so it will look stretched. Crop it square and upload it again.' };
-    status(''); update();
-  };
-  i.onerror = () => status('That photo is not online yet. GitHub takes about a minute after an upload; try again shortly.');
-  i.src = url + (url.includes('?') ? '&' : '?') + 'check=' + Date.now();
+  const i = new Image();
+  i.onload = () => { st.photo = { url }; status(''); update(); };
+  i.onerror = () => status('That photo is still being prepared on GitHub. Wait a minute, reload the page and choose it again.');
+  i.src = url;
 }
 
 f.addEventListener('input', e => { if (e.target.name !== 'photo') update(); });
@@ -198,9 +193,10 @@ document.getElementById('copy').onclick = async () => {
     if (!r.ok) throw new Error(r.status);
     const photos = (await r.json()).filter(x => x.type === 'file' && /\.(png|jpe?g|webp)$/i.test(x.name));
     f.photo.innerHTML = photos.map(x => {
-      const url = PAGES + 'assets/photos/' + encodeURIComponent(x.name);
-      return `<option value="${esc(url)}"${url === st.photo.url ? ' selected' : ''}>${esc(label(x.name))}</option>`;
+      const url = emailPhoto(x.name, x.sha);
+      return `<option value="${esc(url)}"${url.split('?')[0] === st.photo.url.split('?')[0] ? ' selected' : ''}>${esc(label(x.name))}</option>`;
     }).join('');
+    if (f.photo.value) { st.photo = { url: f.photo.value }; update(); }
   } catch (e) {
     f.photo.innerHTML = `<option value="${esc(st.photo.url)}">Shikhar Parekh</option>`;
     status('Could not list the photos on GitHub (reload to try again).');
