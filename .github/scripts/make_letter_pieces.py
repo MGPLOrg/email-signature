@@ -1,4 +1,4 @@
-"""Draw the pictures the signature is built from (run once by hand; results in assets/email/g/).
+"""Draw the pictures the signature is built from (run once by hand; results in g/ at the site root, to keep the signature short).
 
 The Gmail phone apps recolour text and backgrounds in dark mode but never pictures. So the
 generator builds the whole signature from pictures: the fixed parts of the 700x200 card
@@ -7,7 +7,7 @@ phone and email, which it lines up as you type. Nothing is uploaded per person a
 stays white in every dark mode. All pictures are opaque, drawn at 2x, and none is plain white
 (fully blank pictures showed up black in Gmail before), so fillers carry an invisible mark.
 
-Output (all in assets/email/g/):
+Output (all in g/):
   fixed pieces   a-top, a-left, a-mid, a-addr, b-top, b-blank (photo area), b-bottom, c-top, c-left, c-right,
                  c-phone-icon, c-email-icon, c-at, c-plus, c-web, c-social-*, c-bottom
   characters     <style><code>.png, style n = name, r = role, c = contacts; code = char code
@@ -21,7 +21,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[2]
 EMAIL = ROOT / "assets" / "email"
-OUT = EMAIL / "g"
+OUT = ROOT / "g"
 FONTS = ROOT / ".github" / "fonts"
 S = 2
 W, H = 700, 200
